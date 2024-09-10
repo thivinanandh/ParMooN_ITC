@@ -1,0 +1,19 @@
+# Ignore file name
+CMakeLists.txt
+UserConfig.cmake
+
+# Ignore Folders
+BUILD
+
+BUILD*/
+
+build
+
+build*/
+
+doc/latex*/
+
+doc/html*/
+
+.vscode/
+
