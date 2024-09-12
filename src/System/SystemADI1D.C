@@ -53,7 +53,7 @@ TSystemADI1D::TSystemADI1D(int N_L, double start, double end, BoundCond1D *bound
  char IString[] = "I";
  FESpace1D_Intl = new TFESpace1D(Coll_Intl, IString, IString, TDatabase::ParamDB->ANSATZ_ORDER_INTL);
  N_Dof = FESpace1D_Intl->GetN_DegreesOfFreedom();
-
+  
  if(TDatabase::ParamDB->ANSATZ_ORDER_INTL<0)
   {
    FESpace1D_Intl->SetAsDGSpace(); 
@@ -70,7 +70,7 @@ TSystemADI1D::TSystemADI1D(int N_L, double start, double end, BoundCond1D *bound
 
   TSquareStructure1D *SqStructureIntl = new TSquareStructure1D(FESpace1D_Intl);
   SqStructureIntl->Sort();
-
+  
   M_Intl = new TSquareMatrix1D(SqStructureIntl);
   A_Intl= new TSquareMatrix1D(SqStructureIntl);
 
@@ -87,9 +87,10 @@ TSystemADI1D::TSystemADI1D(int N_L, double start, double end, BoundCond1D *bound
   //read boundary conditions 
   boundConLminLMax(cond_Lmin, cond_Lmax);
 
+
   // nodal points to evaluate nodal values
   this->GenerateNodalPts();
-  OutPut("Internal space Dof: "<<  N_Dof << " Nodal Points: " <<  N_NodalPts<< endl);
+  // OutPut("Internal space Dof: "<<  N_Dof << " Nodal Points: " <<  N_NodalPts<< endl);
 }
 
 void TSystemADI1D::Init(int n_Coord, int n_Xpos, double *xpos, int n_ADISystems, int *n_LnodalPos, double **LnodalPos, 
@@ -120,6 +121,7 @@ void TSystemADI1D::Init(int n_Coord, int n_Xpos, double *xpos, int n_ADISystems,
  OwnADI_Idx = ownADI_Idx;
  Sol_XposLNnodal = sol_XposLNnodal;
  N_Coord = n_Coord;
+
   
  int N;
  if(N_LnodalPos[OwnADI_Idx]> N_Dof) 
@@ -135,6 +137,25 @@ void TSystemADI1D::Interpolate(int n_Coord, double *Coords, double *Sol, DoubleF
 {
  FENodalFunction->InterpolateNodalPts(n_Coord, Coords, Exact, Sol);
 }
+
+
+void TSystemADI1D::Interpolate_With_Coord(int n_Coord, double *Sol, DoubleFunctND *Exact)
+{
+
+  // loop over all nodal points
+  for(int i=0;i<N_Xpos;i++)
+  {
+    double Coords[n_Coord];
+    Coords[0] = Xpos[i];
+    Coords[1] = Xpos[N_Xpos + i ];
+    Coords[2] = Xpos[2*N_Xpos + i ];
+    Coords[3] = 0; // Dummy value for internal Co-ord. Actual value will be populated in Interpolate function
+    double* solution_local = Sol + i*N_LnodalPos[OwnADI_Idx];
+
+    FENodalFunction->InterpolateNodalPts(n_Coord, Coords, Exact, solution_local);
+  }
+}
+
 
 void TSystemADI1D::Solve(int N_Param, double *Coords, CoeffFctND *Bilinear, double *Sol)
 {
@@ -1057,7 +1078,7 @@ void TSystemADI1D::GenerateNodalPts()
   TBaseFunct1D *bf;
 
   N_Cells = Coll_Intl->GetN_Cells();
-
+  
   N_AllLocalPoints = 0;
   for(i=0; i<N_Cells; i++)
   {
@@ -1071,6 +1092,7 @@ void TSystemADI1D::GenerateNodalPts()
     N_LocalDOFs = Element->GetN_DOF();
     N_AllLocalPoints +=N_Points;
   }
+  
 
   L_loc = new double [N_AllLocalPoints];
   L_loc_origOrder = new double [N_AllLocalPoints];
@@ -1088,13 +1110,17 @@ void TSystemADI1D::GenerateNodalPts()
     rt = TFEDatabase2D::GetRefTrans1D(LineAffin);
     ((TLineAffin *)rt)->SetCell(cell);
     ((TLineAffin *)rt)->GetOrigFromRef(N_Points, xi, X, Y, AbsDetjk);
+    
 
     for(j=0; j<N_Points; j++)
     {
       L_loc[N_AllLocalPoints] = X[j];
       N_AllLocalPoints++;
     }
+    // cout << " Cell INdex " << i << " N_Points " << N_Points << " N_AllLocalPoints " << N_AllLocalPoints << endl;
   } // for(i=0; i<N_Cells; i++)
+
+  
 
   memcpy(L_loc_origOrder, L_loc,  N_AllLocalPoints*SizeOfDouble);
 
@@ -1220,8 +1246,8 @@ void TSystemADI1D::Generate1DMesh(double Start, double End, int N_Cells, double 
      }
      OutPut("L h_min : " << hmin << " L h_max : " << hmax << endl);
     
-  //  for(i=0; i<N_Vert; i++)
-  //   cout<< i << " X[i] " << X[i] <<endl;
+//    for(i=0; i<N_Vert; i++)
+//     cout<< i << " X[i] " << X[i] <<endl;
  
 //  exit(0);
 
@@ -1229,6 +1255,7 @@ void TSystemADI1D::Generate1DMesh(double Start, double End, int N_Cells, double 
   Vetrex = new TVertex*[N_Vert]; 
 
   y=0.;
+  double z=0;
 
   for(i=0; i<N_Cells; i++)
    {
@@ -1237,10 +1264,20 @@ void TSystemADI1D::Generate1DMesh(double Start, double End, int N_Cells, double 
 #ifdef __2D__
     Vetrex[i] = new TVertex(X[i], y);
 #else
-  cout << "Not Yet Implemented " <<endl;
+  // cout << "Not Yet Implemented " <<endl; // Commented out, as 3D vertex is added
+  Vetrex[i] = new TVertex(X[i], y, z);
 #endif
    }
-   
+
+   // if X_pos is not given, then last vertex is added
+    if(!XPos)
+    {
+#ifdef __2D__
+     Vetrex[N_Vert-1] = new TVertex(X[N_Vert-1], y);
+#else
+      Vetrex[N_Vert-1] = new TVertex(X[N_Vert-1], y, z);
+#endif
+    }
 #ifdef __2D__
   Vetrex[N_Cells] = new TVertex(X[N_Vert-1], y);
 #endif

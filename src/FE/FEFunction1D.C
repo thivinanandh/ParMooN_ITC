@@ -297,8 +297,9 @@ void TFEFunction1D::InterpolateNodalPts(int N_Coord, double *Coords, DoubleFunct
   IndexArray = new int[N_GlobNodalPts];
   memset(IndexArray, 0, SizeOfInt*N_GlobNodalPts);
   memset(val, 0, SizeOfDouble*N_GlobNodalPts);
-  
+
   disp = 0;
+
   for(i=0; i<N_Cells; i++)
    {
     cell = Coll->GetCell(i);
@@ -314,27 +315,27 @@ void TFEFunction1D::InterpolateNodalPts(int N_Coord, double *Coords, DoubleFunct
     ((TLineAffin *)rt)->GetOrigFromRef(N_Points, xi, Z, AbsDetjk);
 
     for(j=0;j<N_Points;j++)
-     {
+    {
       Coords[N_Coord-1] = Z[j];
       Exact(N_Coord, Coords, FctVal);
       k = NodalPtIndex[disp + j];
       val[k] += FctVal[0];
       IndexArray[k]++;
-     }
+    }
 
     disp +=N_Points;
    } // for(i=0; i<N_Cells; i++)
+  
 
    for(i=0; i<N_GlobNodalPts; i++)
     {
-     if(IndexArray[i]==0) 
+      if(IndexArray[i]==0) 
       {
-       cout << "Error in TFEFunction1D::InterpolateNodalPts: "<< IndexArray[i] << endl;
-       exit(0);
+        cout << "Error in TFEFunction1D::InterpolateNodalPts: "<< IndexArray[i] << endl;
+        exit(0);
       }
-     val[i] /= (double)IndexArray[i];
+      val[i] /= (double)IndexArray[i];
     }
-
 }
 
 

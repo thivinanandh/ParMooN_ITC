@@ -68,6 +68,9 @@ class TSystemADI1D : public TSystemADI
 
     void Interpolate(int n_Coord, double *Coords, double *Sol, DoubleFunctND *Exact);
 
+    // Generate the Co-ordinates of the nodal points and pass it to the Interpolate function
+    void Interpolate_With_Coord(int n_Coord, double *Sol, DoubleFunctND *Exact);
+
     int Nodal2DOF(double *Sol_XposLNnodLOwnDof);
 
     int DOF2Nodal(double *Sol_XposLNnodLOwnDof);

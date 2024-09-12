@@ -217,8 +217,7 @@ void TLineAffin::SetCell(TBaseCell *cell)
 //   y0 = 0.;   y1 = 0.; 
 #endif
 
-// cout<< " y0 " << y0<< " y1 " << y1<<endl;
-// cout<< " x0 " << x0<< " x1 " << x1<<endl;
+
 
   xc0 = (x0 + x1) * 0.5;
   xc1 = (x1 - x0) * 0.5;

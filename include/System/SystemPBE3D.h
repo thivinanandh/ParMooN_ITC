@@ -1,6 +1,6 @@
 /** ************************************************************************ 
 *
-* @class     TSystemPBE3D
+* @class     TSystemPBE1D
 * @brief     stores the information of a scalar 3D+3DSurface  PDE system 
 * @author    Sashikumaar Ganesan
 * @date      07.10.2019
@@ -8,8 +8,8 @@
  ************************************************************************  */
 
 
-#ifndef __SYSTEMPBE3D__
-#define __SYSTEMPBE3D__
+#ifndef __SYSTEMPBE1D__
+#define __SYSTEMPBE1D__
 
 #include <SquareMatrix3D.h>
 #include <SystemTCD3D.h>
@@ -18,7 +18,7 @@
 #include <Output3D.h>
 
 /**class for 3D scalar system matrix */
-class TSystemPBE3D : public TSystemTCD3D
+class TSystemPBE1D : public TSystemTCD3D
 {
   protected:
 #ifdef _MPI
@@ -95,11 +95,11 @@ class TSystemPBE3D : public TSystemTCD3D
 
   public:
     /** constructor */
-     TSystemPBE3D(int N_levels, TFESpace3D **fespaces, double **sol, double **rhs, int disctype, int solver,
+     TSystemPBE1D(int N_levels, TFESpace3D **fespaces, double **sol, double **rhs, int disctype, int solver,
                        TFEFunction3D **spatialFEFunctions, DoubleFunctND *getKernel, DoubleFunctND *getRhs, TDomain* Domain_Intl);
 
     /** destrcutor */
-    ~TSystemPBE3D();
+    ~TSystemPBE1D();
 
     /** methods */
     void Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue, 
@@ -155,6 +155,9 @@ class TSystemPBE3D : public TSystemTCD3D
     /** Compute Error */
     void GetErrors(DoubleFunctVect *Exact, TFEFunction3D *ScalarFunction, double *sol_all, double &l2);
     
+
+    /** Generate uniform 1D Internal Co-ordinates*/
+    void Generate1DMesh(TDomain *Domain_Intl, double L0, double, int N);
     /** return the residual of the system for the given sol*/
     // double GetResidual(double *sol);
     

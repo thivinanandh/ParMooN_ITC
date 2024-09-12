@@ -186,6 +186,11 @@ void SurfBoundValue(int BdComp, double Param, double &value)
   exit(0);
 }
 
+void Initial_All(int N_Coord, double* in, double* out)
+{
+  
+}
+
 
 void InitialS(double x, double y, double *values)
 {
