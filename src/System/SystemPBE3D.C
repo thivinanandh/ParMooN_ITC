@@ -1,11 +1,11 @@
 /** ************************************************************************ 
-* @brief     source file for TSystemTCD3D
+* @brief     source file for TSystemPBE3D
 * @author    Sashikumaar Ganesan
 * @date      24.01.15
 * @History 
  ************************************************************************  */
 #include <Database.h>
-#include <SystemTCD3D.h>
+#include <SystemPBE3D.h>
 #include <SquareStructure3D.h>
 #include <DiscreteForm3D.h>
 #include <Assemble3D.h>
@@ -16,10 +16,13 @@
 #include <Solver.h>
 #include <AssembleMat3D.h>
 
+#include <FESpace3D.h>
+#include <FEVectFunct3D.h>
+
 #include <stdlib.h>
 #include <string.h>
 
-TSystemTCD3D::TSystemTCD3D(int N_levels, TFESpace3D **fespaces, double **sol, double **rhs, int disctype, int solver)
+TSystemPBE3D::TSystemPBE3D(int N_levels, TFESpace3D **fespaces, double **sol, double **rhs, int disctype, int solver)
                           :TSystemCD3D(N_levels, fespaces, sol, rhs, disctype, solver)
 {
   int i;
@@ -56,7 +59,7 @@ TSystemTCD3D::TSystemTCD3D(int N_levels, TFESpace3D **fespaces, double **sol, do
 } // constructor
 
 
-TSystemTCD3D::~TSystemTCD3D()
+TSystemPBE3D::~TSystemPBE3D()
 {
   int i;
   
@@ -87,7 +90,7 @@ TSystemTCD3D::~TSystemTCD3D()
 }
 
 
-void TSystemTCD3D::Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue,
+void TSystemPBE3D::Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue,
                               TAuxParam3D *aux )
 {
 #ifdef _MPI
@@ -176,7 +179,7 @@ void TSystemTCD3D::Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond,
 
 // For Population Balance Equation with NSE Values. 
 // IT alsi includes the C . \grad(u_p)
-void TSystemTCD3D::Init_with_NSEValues(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue,
+void TSystemPBE3D::Init_with_NSEValues(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue,
                               TAuxParam3D *aux )
 {
   cout << "Correct Function for Init_with_NSEValues" << endl;
@@ -264,8 +267,167 @@ void TSystemTCD3D::Init_with_NSEValues(CoeffFct3D *BilinearCoeffs, BoundCondFunc
 } // Init
 
 
+// Function to import values for the drift velocity
+void TSystemPBE3D::Init_for_drift_velocity(TFEVectFunct3D** fevect_drift_array, double* g, double fluid_rho, double* particle_rho, double fluid_viscosity,
+          int N_internal, double* diameter_values, TFEVectFunct3D* fevect_b, int n_velocity_points)
+{
+  // Assign all the values
+  m_fevect_drift_array = fevect_drift_array;
+  m_g_array = g;
+  m_fluid_rho = fluid_rho;
+  m_particle_rho = particle_rho;
+  m_fluid_viscosity = fluid_viscosity;
+  m_N_internal = N_internal;
+  m_diameter_values = diameter_values;
+  m_fevect_fluid_velocity = fevect_b; // Stores the fevect function of the Underlying Fluid field. 
+  m_n_velocity_points = n_velocity_points;
 
-void TSystemTCD3D::AssembleMRhs()
+  // Set up Array and memory to store the gradients of the drift velocity
+  double** particle_velocity_gradient_x = new double*[m_N_internal];
+  double** particle_velocity_gradient_y = new double*[m_N_internal];
+  double** particle_velocity_gradient_z = new double*[m_N_internal];
+
+  for (int i = 0; i < m_N_internal; i++)
+  {
+    particle_velocity_gradient_x[i] = new double[m_n_velocity_points]();
+    particle_velocity_gradient_y[i] = new double[m_n_velocity_points]();
+    particle_velocity_gradient_z[i] = new double[m_n_velocity_points]();
+  }
+
+  // obtain the co-ordinates of the Physical points where fluid velocity is stored. 
+  // For this get the FeVect of drift velocity for the first component and use GridToData to get the values
+  // This is done to get the physical co-ordinates of the points where the fluid velocity is stored.
+  m_fevect_drift = fevect_drift_array[0];
+  m_physical_coordinates = new double [4 * m_n_velocity_points]();  // here the 4th dimension will be used to store cell id.
+  TFESpace3D* fespace_drift = m_fevect_drift->GetFESpace3D();
+
+  // Create a new FeVectFunction to Store the Physical Co-ordinates
+  TFEVectFunct3D* fevect_physical_coordinates = new TFEVectFunct3D(fespace_drift, "Physical_Coordinates", "Physical_Coordinates", m_physical_coordinates, m_n_velocity_points, 3);
+  fevect_physical_coordinates->GridToDataWithCellid(); // populates cell id on 4th dimension
+
+
+} 
+
+void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, double* solution)
+{
+  // Assign the solution to the solution array
+  TFEVectFunct3D* drift_velocity_fevect = m_fevect_drift_array[internal_level];
+
+  // For ith Internal point, loop over all the physical points
+  for (int index = 0 ; index < m_n_velocity_points ; index++)
+  {
+    // obtain the gradients of the drift velocity at current point
+    double x_coord = m_physical_coordinates[index];
+    double y_coord = m_physical_coordinates[m_n_velocity_points + index];
+    double z_coord = m_physical_coordinates[2 * m_n_velocity_points + index];
+    int cell_id = (int)m_physical_coordinates[3 * m_n_velocity_points + index];
+    TBaseCell* cell = m_fevect_drift->GetFESpace3D()->GetCollection()->GetCell(cell_id);
+    
+    // Store the Components of the drift velocity and the gradients
+    TFEFunction3D* comp0 = drift_velocity_fevect->GetComponent(0);
+    TFEFunction3D* comp1 = drift_velocity_fevect->GetComponent(1);
+    TFEFunction3D* comp2 = drift_velocity_fevect->GetComponent(2);
+
+    
+    // declare variable to store temp gradient
+    double values[4];
+    comp0->FindGradientLocal(cell, cell_id, x_coord, y_coord, z_coord, values);
+    double vel_value_x = values[0];
+    double vel_x_gradient_x = values[1];
+    double vel_x_gradient_y = values[2];
+    double vel_x_gradient_z = values[3];
+
+    comp1->FindGradientLocal(cell, cell_id, x_coord, y_coord, z_coord, values);
+    double vel_value_y = values[0];
+    double vel_y_gradient_x = values[1];
+    double vel_y_gradient_y = values[2];
+    double vel_y_gradient_z = values[3];
+
+    comp2->FindGradientLocal(cell, cell_id, x_coord, y_coord, z_coord, values);
+    double vel_value_z = values[0];
+    double vel_z_gradient_x = values[1];
+    double vel_z_gradient_y = values[2];
+    double vel_z_gradient_z = values[3];
+
+    // Store the components
+    TFEFunction3D* fluid_comp0 = m_fevect_fluid_velocity->GetComponent(0);
+    TFEFunction3D* fluid_comp1 = m_fevect_fluid_velocity->GetComponent(1);
+    TFEFunction3D* fluid_comp2 = m_fevect_fluid_velocity->GetComponent(2);
+
+    // Get the values
+    double* fluid_velocity_x = fluid_comp0->GetValues();
+    double* fluid_velocity_y = fluid_comp1->GetValues();
+    double* fluid_velocity_z = fluid_comp2->GetValues();
+
+    // Check if there is a mismatch on the interpolated values and the actual values
+    // This should not be occurring, since we are picking the solution values at nodal points, and we are interpolating at the nodal points. 
+    // if (( abs(solution[index] - vel_value_x) > 1e-5  ) || (abs(solution[m_n_velocity_points + index] - vel_value_y) > 1e-5) || (abs(solution[2 * m_n_velocity_points + index] - vel_value_z) > 1e-5))
+    // {
+    //   cout << "Mismatch in the values of the drift velocity at index : " << index << " Internal Level : " << internal_level << endl;
+    //   cout << " Solution Value x: " << solution[index] << " Interpolated Value : " << vel_value_x ;
+    //   cout << " Solution Value y: " << solution[m_n_velocity_points + index] << " Interpolated Value : " << vel_value_y ;
+    //   cout << " Solution Value z: " << solution[2 * m_n_velocity_points + index] << " Interpolated Value : " << vel_value_z ;
+
+    //   vel_value_x = 0;
+    //   vel_value_y = 0;
+    //   vel_value_z = 0;
+
+    //   vel_x_gradient_x = 0;
+    //   vel_x_gradient_y = 0;
+    //   vel_x_gradient_z = 0;
+
+    //   vel_y_gradient_x = 0;
+    //   vel_y_gradient_y = 0;
+    //   vel_y_gradient_z = 0;
+    // }
+
+    double diameter = m_diameter_values[internal_level] * 1e-6; // Convert to meters
+    double tau = (m_particle_rho[internal_level] * diameter * diameter) / (18 * m_fluid_viscosity);
+
+    double gamma = 0.001;
+
+    // Calculate the drift velocity in x-direction
+    double drift_velocity_x = -1.0 * (vel_value_x* vel_x_gradient_x + vel_value_y * vel_y_gradient_x + vel_value_z * vel_z_gradient_x) ;
+    drift_velocity_x += -1.0 * (1.0/tau) * (solution[index] - fluid_velocity_x[index]) + (1.0 - gamma) * m_g_array[0];
+    drift_velocity_x = drift_velocity_x * timestep + vel_value_x;
+    
+    drift_velocity_x = fluid_velocity_x[index]; // For now, set the drift velocity to the fluid velocity.
+
+    // Calculate the drift velocity in y-direction
+    double drift_velocity_y = -1.0 * (vel_value_x* vel_x_gradient_y + vel_value_y * vel_y_gradient_y + vel_value_z * vel_z_gradient_y) ;
+    drift_velocity_y += -1.0 * (1.0/tau) * (solution[m_n_velocity_points + index] - fluid_velocity_y[index]) + (1.0 - gamma) * m_g_array[1];
+    drift_velocity_y = drift_velocity_y * timestep + vel_value_y;
+
+    drift_velocity_y = fluid_velocity_y[index]; // For now, set the drift velocity to the fluid velocity.
+
+    // Calculate the drift velocity in z-direction
+    double drift_velocity_z = -1.0 * (vel_value_x* vel_x_gradient_z + vel_value_y * vel_y_gradient_z + vel_value_z * vel_z_gradient_z) ;
+    drift_velocity_z += -1.0 * (1.0/tau) * (solution[2 * m_n_velocity_points + index] - fluid_velocity_z[index]) + (1.0 - gamma) * m_g_array[2];
+    drift_velocity_z = drift_velocity_z * timestep + vel_value_z;
+
+    drift_velocity_z = fluid_velocity_z[index]; // For now, set the drift velocity to the fluid velocity.
+
+    // Assign the computed values to the solution array
+    solution[index] = drift_velocity_x;
+    solution[m_n_velocity_points + index] = drift_velocity_y;
+    solution[2 * m_n_velocity_points + index] = drift_velocity_z;
+
+    // Free the memory allocated for the FEFunction3D
+    delete comp0;
+    delete comp1;
+    delete comp2;
+
+    delete fluid_comp0;
+    delete fluid_comp1;
+    delete fluid_comp2;
+
+  }
+}
+
+
+
+
+void TSystemPBE3D::AssembleMRhs()
 {
   //this is set to true for direct solver factorization
   factorize = true;
@@ -294,7 +456,7 @@ void TSystemTCD3D::AssembleMRhs()
 } // TSystemMatScalar3D::AssembleMRhs 
 
 
-void TSystemTCD3D::AssembleARhs()
+void TSystemPBE3D::AssembleARhs()
 {
   //this is set to true for direct solver factorization
   factorize = true;
@@ -318,7 +480,7 @@ void TSystemTCD3D::AssembleARhs()
     
 } // TSystemMatScalar3D::AssembleARhs 
 
-void TSystemTCD3D::AssembleSystMat(double *oldrhs, double *oldsol, double *rhs, double *sol
+void TSystemPBE3D::AssembleSystMat(double *oldrhs, double *oldsol, double *rhs, double *sol
 #ifdef _MPI
                                              , double **Rhs_array
 #endif
@@ -386,7 +548,7 @@ void TSystemTCD3D::AssembleSystMat(double *oldrhs, double *oldsol, double *rhs, 
 
 } // AssembleSystMat
 
-void TSystemTCD3D::RestoreMassMat()
+void TSystemPBE3D::RestoreMassMat()
 {
  int i;
 
@@ -407,7 +569,7 @@ void TSystemTCD3D::RestoreMassMat()
 
 }
 
-void TSystemTCD3D::Solve(double *sol)
+void TSystemPBE3D::Solve(double *sol)
 {  
     switch(SOLVER)
      {
@@ -468,7 +630,7 @@ void TSystemTCD3D::Solve(double *sol)
      
 }
 
-double TSystemTCD3D::GetResidual(double *sol)
+double TSystemPBE3D::GetResidual(double *sol)
 {
   double residual_scalar=0.0;
   

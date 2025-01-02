@@ -1331,14 +1331,15 @@ void TFEFunction3D::FindGradientLocal(TBaseCell *cell, int cell_no,
   values[2] = uy;
   values[3] = uz;
   
-  delete uorig;
-  delete uxorig;
-  delete uyorig;
-  delete uzorig;
-  delete uref;
-  delete uxiref;
-  delete uetaref;
-  delete uzetaref;
+  // Deleting the Arrays. 
+  delete[] uorig;
+  delete[] uxorig;
+  delete[] uyorig;
+  delete[] uzorig;
+  delete[] uref;
+  delete[] uxiref;
+  delete[] uetaref;
+  delete[] uzetaref;
   
 }
 

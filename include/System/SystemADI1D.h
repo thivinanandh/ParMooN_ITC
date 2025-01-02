@@ -43,6 +43,8 @@ class TSystemADI1D : public TSystemADI
 
     BoundCond cond_Lmin, cond_Lmax;
 
+    double* X;
+
   private:
    int ConstructAllInfo();
 
@@ -100,6 +102,11 @@ class TSystemADI1D : public TSystemADI
    int GetN_InternalLevels()
     {
      return N_Dof;
+    }
+
+    double *GetNodalPt_Coord()
+    {
+      return X;
     }
 
     // double GetQ3Max(double *currsol);

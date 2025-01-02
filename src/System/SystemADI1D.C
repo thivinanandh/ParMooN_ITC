@@ -51,9 +51,9 @@ TSystemADI1D::TSystemADI1D(int N_L, double start, double end, BoundCond1D *bound
   }
 
  char IString[] = "I";
- FESpace1D_Intl = new TFESpace1D(Coll_Intl, IString, IString, TDatabase::ParamDB->ANSATZ_ORDER_INTL);
+ FESpace1D_Intl = new TFESpace1D(Coll_Intl, IString, IString, TDatabase::ParamDB->ANSATZ_ORDER_INTL +1 );
  N_Dof = FESpace1D_Intl->GetN_DegreesOfFreedom();
-  
+
  if(TDatabase::ParamDB->ANSATZ_ORDER_INTL<0)
   {
    FESpace1D_Intl->SetAsDGSpace(); 
@@ -181,7 +181,7 @@ void TSystemADI1D::Solve(int N_Param, double *Coords, CoeffFctND *Bilinear, doub
     S_Intl->Reset();
     K_Intl->Reset();
    }
-
+   GetGrowthAndNuc = NULL;
   /**growth rate based on concentration defined in Example file*/
   if(GetGrowthAndNuc)
    {
@@ -195,6 +195,8 @@ void TSystemADI1D::Solve(int N_Param, double *Coords, CoeffFctND *Bilinear, doub
   }
   else
   {
+    
+  
    G = 0.;
    BDValue1 = 0; //zero neumann
    BDValue2 = 0; //zero neumann
@@ -213,7 +215,6 @@ void TSystemADI1D::Solve(int N_Param, double *Coords, CoeffFctND *Bilinear, doub
        
   }
    
-
 
   A_Intl->Reset();
 
@@ -1209,7 +1210,7 @@ void TSystemADI1D::Generate1DMesh(double Start, double End, int N_Cells, double 
 {
   int i, j, N_Vert;
   int *Lines;
-  double len, h, x, y, *X;
+  double len, h, x, y;
   double hmin, hmax;
   TVertex **Vetrex;
   TJoint *Joint;
@@ -1236,6 +1237,10 @@ void TSystemADI1D::Generate1DMesh(double Start, double End, int N_Cells, double 
   
      X[N_Vert-1] = End;
     }
+
+    // print all the Internal Co-Ordinates
+    for(i=0; i<N_Vert; i++)
+     cout<< i << " X[i] " << X[i] <<endl;
 
     hmin = 1.e8; hmax = -1.e8; 
     for(i=0; i<N_Vert-1; i++)

@@ -246,7 +246,7 @@ int main(int argc, char* argv[])
   Rhs_array[i] = rhs;   
          
   if(i==LEVELS-1 && mg_type==1) 
-   {  
+  {  
     N_DOF = Scalar_FeSpaces[mg_level-1]->GetN_DegreesOfFreedom();
     sol = new double[N_DOF];
     rhs = new double[N_DOF];
@@ -255,31 +255,31 @@ int main(int argc, char* argv[])
 
     Scalar_FeFunction = new TFEFunction3D(Scalar_FeSpaces[mg_level-1], CString, CString, sol, N_DOF);   
     Scalar_FeFunctions[mg_level-1] = Scalar_FeFunction;
-   }//   if(i==LEVELS-1 && mg_type==1) 
+  }//   if(i==LEVELS-1 && mg_type==1) 
   else
-    {
-      Scalar_FeFunction  = new TFEFunction3D(Scalar_FeSpaces[i], CString, CString, sol, N_DOF);  
-      Scalar_FeFunctions[i] = Scalar_FeFunction;
-    }
+  {
+    Scalar_FeFunction  = new TFEFunction3D(Scalar_FeSpaces[i], CString, CString, sol, N_DOF);  
+    Scalar_FeFunctions[i] = Scalar_FeFunction;
+  }
 
 #ifdef _MPI
-     N_Cells = coll->GetN_Cells();
-     printf("rank=%d\t N_Cells   : %d\t Dof all   :%d\n",rank,N_Cells,N_DOF);
+    N_Cells = coll->GetN_Cells();
+    printf("rank=%d\t N_Cells   : %d\t Dof all   :%d\n",rank,N_Cells,N_DOF);
 #endif
-   }// for(i=0;i<LEVELS;i++)
+  }// for(i=0;i<LEVELS;i++)
 
-   oldrhs = new double[N_DOF];
-   oldsol = new double[N_DOF];
-   
+  oldrhs = new double[N_DOF];
+  oldsol = new double[N_DOF];
+  
 #ifndef _MPI   
-   N_Cells = coll->GetN_Cells();
+  N_Cells = coll->GetN_Cells();
   #ifdef _SMPI
   if(TDatabase::ParamDB->Par_P0)
   #endif
   {   
-   OutPut("N_Cells   : " << N_Cells <<endl);
-   OutPut("Dof all   : " << N_DOF  << endl);  
-   OutPut(endl);
+  OutPut("N_Cells   : " << N_Cells <<endl);
+  OutPut("Dof all   : " << N_DOF  << endl);  
+  OutPut(endl);
   }
 #endif
 

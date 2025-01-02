@@ -542,10 +542,10 @@ void MatricesAKRhsAssemble_SUPG(double Mult, double *coeff, double *param,
       if ((TDatabase::ParamDB->INTERNAL_SOLD_ACTIVE) && (TDatabase::ParamDB->SOLD_TYPE==2))
       {
 	  MatrixRowS[j] += val2 * ( (c22+c33)*ansatz100*test100 + (c11+c33)*ansatz010*test010
-					    + (c11+c22)*ansatz001*test001
-					    -c13*(ansatz001*test100+ansatz100*test001)
-					    -c12*(ansatz010*test100+ansatz100*test010)
-					    -c23*(ansatz001*test010+ansatz010*test001));
+                      + (c11+c22)*ansatz001*test001
+                      -c13*(ansatz001*test100+ansatz100*test001)
+                      -c12*(ansatz010*test100+ansatz100*test010)
+                      -c23*(ansatz001*test010+ansatz010*test001));
       }
     } // endfor j
   } // endfor i
@@ -606,6 +606,87 @@ void MatrixARhsAssemble(double Mult, double *coeff, double *param,
     } // endfor j
   } // endfor i
 }
+
+// Function performs assembly with NSE-3D values at the quadrature points
+void MatrixARhsAssembleNSEValues(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs)
+{
+  // cout << " TCD3D Assemble with NSE-3D values " << endl;
+  double **MatrixA, **MatrixK, *Rhs, val, *MatrixRowA, *MatrixRowK;
+  double ansatz000, ansatz100, ansatz010, ansatz001;
+  double test000, test100, test010, test001;
+  double *Orig0, *Orig1, *Orig2, *Orig3;
+  int i,j, N_;
+  double c0, c1, c2, c3, c4, c5, Pe; 
+
+  MatrixA = LocMatrices[0];
+  Rhs = LocRhs[0];
+
+  N_ = N_BaseFuncts[0];
+
+  Orig0 = OrigValues[0];
+  Orig1 = OrigValues[1];
+  Orig2 = OrigValues[2];
+  Orig3 = OrigValues[3];
+
+  c0 = coeff[0]; // eps
+  c4 = coeff[4]; // c
+  c5 = coeff[5]; // f
+
+
+  // These are advection values read from the NSE-3D values
+  // Here is the FeFunct Index and the MultiIndex Array 
+  // The FeFunct Index describes, which ffeunction value is taken at which index of Param Array
+  // The MultiIndex Array describes, which component of the function value is taken (like Which derivative)
+  // int NSFEFctIndexVelo[6] = { 0,0 , 1, 1, 2, 2} ;
+  // MultiIndex3D NSFEMultiIndexVelo[6] = { D000, D100, D000, D010, D000, D001} ;
+  double b_x = param[0];
+  double b_x_grad_x = param[1];
+  double b_y = param[2];
+  double b_y_grad_y = param[3];
+  double b_z = param[4];
+  double b_z_grad_z = param[5];
+
+  // b_x = 0.0;
+  // b_y = 1.0;
+  // b_z = 0.0;
+  // cout << " bx = " << b_x << " by = " << b_y << " bz = " << b_z << endl;
+  // cout << " bx_grad_x = " << b_x_grad_x << " by_grad_y = " << b_y_grad_y << " bz_grad_z = " << b_z_grad_z << endl;  
+  
+  for(i=0;i<N_;i++)
+  {
+    MatrixRowA = MatrixA[i];
+    test100 = Orig0[i];
+    test010 = Orig1[i];
+    test001 = Orig2[i];
+    test000 = Orig3[i];
+
+    Rhs[i] += Mult*test000*c5;
+
+    for(j=0;j<N_;j++)
+    {
+      ansatz100 = Orig0[j];
+      ansatz010 = Orig1[j];
+      ansatz001 = Orig2[j];
+      ansatz000 = Orig3[j];
+
+      // The Original equation was b.\grad(u) -> b_x * u_x + b_y * u_y + b_z * u_z
+      // The variational form will be (b_x * u_x + b_y * u_y + b_z * u_z) * v
+      // Now, the original form is b.\grad(u) + \grad(b).u -> b_x * u_x + b_y * u_y + b_z * u_z + (b_x * v_x + b_y * v_y + b_z * v_z) * u
+
+      val = c0*(test100*ansatz100+test010*ansatz010+test001*ansatz001);
+      val += (b_x*ansatz100+b_y*ansatz010+b_z*ansatz001)*test000;
+      val += (b_x_grad_x + b_y_grad_y + b_z_grad_z) * ansatz000 * test000;
+      // val += c4*ansatz000*test000;
+
+      MatrixRowA[j] += Mult * val;
+    } // endfor j
+  } // endfor i
+}
+
+
 void MatrixAUpwindRhsAssemble(double Mult, double *coeff, double *param,
                             double hK, 
                             double **OrigValues, int *N_BaseFuncts,
@@ -657,6 +738,8 @@ void MatrixAUpwindRhsAssemble(double Mult, double *coeff, double *param,
     } // endfor j
   } // endfor i
 }
+
+
 void RhsAssemble_SUPG(double Mult, double *coeff, double *param,
                       double hK, 
                       double **OrigValues, int *N_BaseFuncts,

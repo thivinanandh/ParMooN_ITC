@@ -45,9 +45,9 @@ double timeC = 0;
 // =======================================================================
 //  #include "../Examples/NSE_3D/BSExample.h" // smooth sol in unit square
 // #include "../Examples/NSE_3D/AnsatzLinConst.h"
-//  #include "../Examples/NSE_3D/CircularChannel.h"
+ #include "../Examples/NSE_3D/Bent_pipe.h"
 // #include "../Examples/NSE_3D/StaticBubble.h"
- #include "../Examples/NSE_3D/DrivenCavity3D.h"
+//  #include "../Examples/NSE_3D/DrivenCavity3D.h"
 // =======================================================================
 // main program
 // =======================================================================

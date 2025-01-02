@@ -107,6 +107,13 @@ class TAuxParam3D
     int GetN_Parameters()
     { return N_Parameters; }
 
+    // Thivin 
+    // Function to assign the FeFunctions to the AuxParam3D. This enables us to send the values of Different FEFunctions to the assembly
+    void SetFEFunctions(TFEFunction3D **fefunctions3d)
+    {
+      FEFunctions3D = fefunctions3d;
+    }
+
 };
 
 // standard function to use for Navier-Stokes

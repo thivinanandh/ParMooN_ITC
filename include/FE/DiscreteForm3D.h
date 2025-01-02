@@ -227,6 +227,10 @@ void InitializeDiscreteForms (TDiscreteForm3D *&DiscreteForm, CoeffFct3D *LinCoe
 void InitializeDiscreteFormsScalar(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin, 
                                    TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff);
 
+// INitialize the discrete form for the Scalar problems with NSE
+void InitializeDiscreteFormsScalarNSE(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin, 
+                                   TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff);
+
 void InitializeDiscreteFormGrid(TDiscreteForm3D *&DiscreteFormGrid, CoeffFct3D *GridCoeffs);
 
 void InitializeDiscreteFormRTE(TDiscreteForm3D *&DiscreteFormMBRhs_Galerkin, TDiscreteForm3D *&DiscreteFormRhs_Galerkin, 

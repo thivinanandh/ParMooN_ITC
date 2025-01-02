@@ -93,6 +93,9 @@ class TSystemADI
     int GetN_Cells()
     {return Coll_Intl->GetN_Cells(); }
 
+    double* getXpos()
+    {return Xpos; }
+
     int GetN_Dof()
     {return N_Dof; }
 

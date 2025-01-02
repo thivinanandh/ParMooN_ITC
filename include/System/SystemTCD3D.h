@@ -60,6 +60,9 @@ class TSystemTCD3D : public TSystemCD3D
 
     /** methods */
     void Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue, TAuxParam3D *aux);
+
+    /** Function, which calls the Assembly function with the NSE3D Values */
+    void Init_with_NSEValues(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue, TAuxParam3D *aux);
     
     /** return the stiffness matric */
     TSquareMatrix3D **GetAMatrix()

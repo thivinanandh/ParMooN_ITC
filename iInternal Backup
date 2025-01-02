@@ -1,0 +1,24 @@
+// =======================================================================================
+      // Solve L0-direction solution -- start
+      // =======================================================================================
+
+      // Solve the internal System for every physical x position
+      // for (int i = 0; i < N_PhySpacePts; i++)
+      // {
+      //   // Solve the internal system for the current x position
+      //   int N_Param = 8;
+      //   double Coords[8]; // To pass additional values and co-rdinates
+      //   double* current_internal_solution = solution_all + i * N_InternalPts;
+      //   double* Xpos = Internal_System->getXpos();
+      //   Coords[0] = PosX[0*N_PhySpacePts + i];
+      //   Coords[1] = PosX[1*N_PhySpacePts + i];
+      //   Coords[2] = PosX[2*N_PhySpacePts + i];
+      //   Coords[3] = 0; // Dummy value for internal Co-ord. Actual value will be populated in Interpolate function
+
+      //   // Assemble the internal system matrix
+      //   Internal_System->AssembleMassMat();
+
+      //   // Assemble the internal system matrix
+      //   Internal_System->Solve(N_Param, Coords, BilinearCoeffs_ND, current_internal_solution);
+      //   cout << " Physical Point: " << i << endl;        
+      // }

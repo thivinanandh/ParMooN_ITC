@@ -34,7 +34,6 @@
 #include <SquareStructure1D.h>
 #include <SquareMatrix1D.h>
 #include <ADISystem1D.h>
-#include <FEFunction1D.h>
 
 // For internal System setup
 #include <SystemADI.h>
@@ -69,22 +68,20 @@ void writeVtkFile(const std::string &VtkBaseName, int img, TOutput3D *Output)
 }
 
 // Convert internal co-ordinates arrangement to physical co-ordinates arrangement
-void Internal2Physical(int N_PhySpacePts, int N_InternalPts, double* solution_old, double* solution_new)
+void Internal2Physical(const double *src, double *dest, int N_physical, int N_internal)
 {
-  for (int i = 0; i < N_PhySpacePts * N_InternalPts; ++i)
+  for (int i = 0; i < N_physical; ++i)
   {
-    int new_index = (i % N_InternalPts) * N_PhySpacePts + (i / N_InternalPts);
-    solution_new[new_index] = solution_old[i];
+    for (int j = 0; j < N_internal; ++j)
+    {
+      dest[j * N_physical + i] = src[i * N_internal + j];
+    }
   }
 }
-
-
-
 
 // Convert physical co-ordinates arrangement to internal co-ordinates arrangement
 void Physical2Internal(const double *src, double *dest, int N_physical, int N_internal)
 {
-  cout << " Error -- Do not use this function " << endl;
   for (int i = 0; i < N_physical; ++i)
   {
     for (int j = 0; j < N_internal; ++j)
@@ -160,6 +157,7 @@ int main(int argc, char *argv[])
   TFESpace3D **Scalar_FeSpaces, *fesp[2], **Scalar_Solid_FeSpaces;
   TFEFunction3D *Scalar_FeFunction, **Scalar_FeFunctions, *Scalar_Solid_FeFunction, **Scalar_Solid_FeFunctions;
   TOutput3D *Output;
+  TSystemPBE1D *Internal_System_Space;
   TDomain *Domain_Intl;
   TAuxParam3D *aux;
   MultiIndex3D AllDerivatives[4] = {D000, D100, D010, D001};
@@ -358,9 +356,9 @@ int main(int argc, char *argv[])
   }
 #endif
 
-  //==========================================================================================================
+  //=========================================================================
   // Spatial position at which the internal system is solverd
-  //==========================================================================================================
+  //=========================================================================
   double *PosX;
   PosX = new double[3 * N_DOF];
   InternalScaling = new double[N_DOF];
@@ -370,10 +368,112 @@ int main(int argc, char *argv[])
                                                         PosX, N_DOF, 3);
   Pos_VectFunction->GridToData();
 
-  //==========================================================================================================
-  // Set up the Internal System
-  //==========================================================================================================
-    // --- THIVIN ---
+  // ======================================================================
+  // Read the Velocity Field values
+  // ======================================================================
+  // setup a fevect function 3d
+  // Create a new fespace with order-2, to store the NSE2D Values, the boundary condition here does not matter
+  TFESpace3D *fespace_b = new TFESpace3D(coll, "b", "b", BoundCondition, 2); //
+  int N_cells = coll->GetN_Cells();
+
+  int n_size_u = fespace_b->GetN_DegreesOfFreedom();
+  cout << "[INFO] : N_DOF for velocity field : " << n_size_u << endl;
+  double *b = new double[3 * n_size_u]();
+  // Generate a Fe-Vect function and function
+  TFEVectFunct3D *fevect_b = new TFEVectFunct3D(fespace_b, "b", "b", b, n_size_u, 3);
+  TFEFunction3D *fefunct_b_array[3];
+
+  fefunct_b_array[0] = fevect_b->GetComponent(0);
+  fefunct_b_array[1] = fevect_b->GetComponent(1);
+  fefunct_b_array[2] = fevect_b->GetComponent(2);
+
+  // generate velocity values
+  int sol_num = 3;
+  int padding = 6 - std::to_string(sol_num).length();
+  std::string u1FileName = "Solution_u_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+  std::string u2FileName = "Solution_v_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+  std::string u3FileName = "Solution_w_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+
+  cout << "[INFO] : Solution files read successfully " << endl;
+
+  // Read the file into the solution array
+  std::ifstream u1File(u1FileName, std::ios::in | std::ios::binary);
+  std::ifstream u2File(u2FileName, std::ios::in | std::ios::binary);
+  std::ifstream u3File(u3FileName, std::ios::in | std::ios::binary);
+
+  // throw an error if the file is not found
+  if (!u1File.is_open())
+    throw std::runtime_error("Could not open file " + u1FileName);
+  if (!u2File.is_open())
+    throw std::runtime_error("Could not open file " + u2FileName);
+  if (!u3File.is_open())
+    throw std::runtime_error("Could not open file " + u3FileName);
+
+  // Read the file into the solution array
+  u1File.read((char *)b, sizeof(double) * n_size_u);
+  u2File.read((char *)b + sizeof(double) * n_size_u, sizeof(double) * n_size_u);
+  u3File.read((char *)b + sizeof(double) * 2 * n_size_u, sizeof(double) * n_size_u);
+
+  // Close the file
+  u1File.close();
+  u2File.close();
+  u3File.close();
+
+
+  // Create a New TOutput3D Object to visualise the Fluid Field.
+  char *VeloVTKBaseName = "Input_Velocity.vtk";
+  TOutput3D *Output_Velo = new TOutput3D(2, 2, 1, 1, Domain);
+  // Add the velocity field to the output
+  Output_Velo->AddFEVectFunct(fevect_b);
+
+  // Write the VTK file
+  Output_Velo->WriteVtk(VeloVTKBaseName);
+  exit(0);
+
+  double *sol_dummy = new double[n_size_u]();
+  double *rhs_dummy = new double[n_size_u]();
+  double **Sol_array_dummy = new double *[1];
+  double **Rhs_dummy_array = new double *[1];
+  Sol_array_dummy[0] = sol_dummy;
+  Rhs_dummy_array[0] = rhs_dummy;
+
+  TFESpace3D *fesp_dummy[1] = {fespace_b};
+  // create a system matrix and assemble them
+  TSystemTCD3D *SystemMatrix_dummy = new TSystemTCD3D(mg_level, fesp_dummy, Sol_array_dummy, Rhs_dummy_array,
+                                                      TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
+  SystemMatrix_dummy->Init(BilinearCoeffs, BoundCondition, BoundValue, NULL);
+  SystemMatrix_dummy->AssembleARhs();
+
+  // Set up the aux to pass the velocity field
+  TFESpace3D *fesp_aux[1];
+  fesp[0] = Scalar_FeSpaces[mg_level - 1];
+  fesp[1] = fespace_b;
+  int NSBeginParamVelo[1] = {0};
+  // Here there are 3 fe functions, one for each component of the velocity field
+  // So for each component, we need Values, Derivative_x, Derivative_y, Derivative_z
+  // WE need an array of 6 values, the order in which these values will be passed is given by the NSFEFctIndexVelo
+  // Here it says first 2 values are for the first component, next 2 for the second and last 2 for the third
+  int NSFEFctIndexVelo[6] = {0, 0, 1, 1, 2, 2};
+  // Now, we need to specicify what are the values that need to be passed
+  // Is it the actual values, or the derivative in x, y or z
+  MultiIndex3D NSFEMultiIndexVelo[6] = {D000, D100, D000, D010, D000, D001};
+  // This means, the values will be passed as
+  // [ b_x, d(b_x)/dx, b_y, d(b_y)/dy, b_z, d(b_z)/dz ]
+  ParamFct *NSFctVelo[1] = {b_params_velo};
+
+  // setup aux
+  aux = new TAuxParam3D(1, 3, 1, 3, fesp + 1, fefunct_b_array, NSFctVelo, NSFEFctIndexVelo, NSFEMultiIndexVelo, 3, NSBeginParamVelo);
+
+  // Initialize the System Matrix for the Physical System
+  TSystemTCD3D *SystemMatrix = new TSystemTCD3D(mg_level, Scalar_FeSpaces, Sol_array, Rhs_array,
+                                                TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
+
+  // Perform init for the system matrix
+  SystemMatrix->Init_with_NSEValues(BilinearCoeffs, BoundCondition, BoundValue, aux);
+  SystemMatrix->AssembleMRhs();
+
+  // Initialize the System Matrix for the Internal System
+  // --- THIVIN ---
   int N_PhySpacePts = N_DOF;
 
   // Store the Boundary Functions in a pointer
@@ -425,6 +525,7 @@ int main(int argc, char *argv[])
   Internal_System->Interpolate_With_Coord(N_Coord, solution_all, InitialValue);
 
   // -- OUTPUT SETUP FOR VISUALISATION ---- //
+
   // Create an double array to store the solution of the internal system
   double **solution_visualize = new double *[N_InternalPts];
   for (int i = 0; i < N_InternalPts; ++i)
@@ -462,7 +563,7 @@ int main(int argc, char *argv[])
   }
 
   // Output for Visualization of the codes.
-  VtkBaseName = "Initial_interpolation";
+  VtkBaseName = TDatabase::ParamDB->VTKBASENAME;
 
   TOutput3D *Output_Intl = new TOutput3D(2, 2, 1, 1, Domain);
 
@@ -473,191 +574,6 @@ int main(int argc, char *argv[])
   // Output the solution for all internal layers
   writeVtkFile(VtkBaseName, i, Output_Intl);
   img++;
-
-  // ==========================================================================================================
-  // Read the Velocity Field values
-  // ===========================================================================================================
-  // setup a fevect function 3d
-  // Create a new fespace with order-2, to store the NSE2D Values, the boundary condition here does not matter
-  // Here FE Order 2 is used because, the velocities generally stored as second order solutions
-  TFESpace3D *fespace_b = new TFESpace3D(coll, "u_fluid", "u_fluid", BoundCondition, 2); 
-
-  int N_cells = coll->GetN_Cells();
-
-  int n_size_u = fespace_b->GetN_DegreesOfFreedom();
-  cout << "[INFO] : N_DOF for velocity field : " << n_size_u << endl;
-  // The below codes are placeholder codes to generate FESpace values for second order solutions
-  double *sol_dummy = new double[n_size_u]();
-  double *rhs_dummy = new double[n_size_u]();
-  double **Sol_array_dummy = new double *[1];
-  double **Rhs_dummy_array = new double *[1];
-  Sol_array_dummy[0] = sol_dummy;
-  Rhs_dummy_array[0] = rhs_dummy;
-
-  TFESpace3D *fesp_dummy[1] = {fespace_b};
-  // create a system matrix and assemble them
-  TSystemPBE3D *SystemMatrix_dummy = new TSystemPBE3D(mg_level, fesp_dummy, Sol_array_dummy, Rhs_dummy_array,
-                                                      TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
-  SystemMatrix_dummy->Init(BilinearCoeffs, BoundCondition, BoundValue, NULL);
-  SystemMatrix_dummy->AssembleARhs();
-
-
-
-
-  double *u_fluid = new double[3 * n_size_u]();
-  // Generate a Fe-Vect function and function
-  TFEVectFunct3D *fevect_b = new TFEVectFunct3D(fespace_b, "u_fluid", "u_fluid", u_fluid, n_size_u, 3);
-  TFEFunction3D *fefunct_b_array[3];
-
-  fefunct_b_array[0] = fevect_b->GetComponent(0);
-  fefunct_b_array[1] = fevect_b->GetComponent(1);
-  fefunct_b_array[2] = fevect_b->GetComponent(2);
-
-  // generate velocity values
-  int sol_num = 3;
-  int padding = 6 - std::to_string(sol_num).length();
-  std::string u1FileName = "Solution_u_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
-  std::string u2FileName = "Solution_v_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
-  std::string u3FileName = "Solution_w_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
-
-  cout << "[INFO] : Solution files read successfully " << endl;
-
-  // Read the file into the solution array
-  std::ifstream u1File(u1FileName, std::ios::in | std::ios::binary);
-  std::ifstream u2File(u2FileName, std::ios::in | std::ios::binary);
-  std::ifstream u3File(u3FileName, std::ios::in | std::ios::binary);
-
-  // throw an error if the file is not found
-  if (!u1File.is_open())
-    throw std::runtime_error("Could not open file " + u1FileName);
-  if (!u2File.is_open())
-    throw std::runtime_error("Could not open file " + u2FileName);
-  if (!u3File.is_open())
-    throw std::runtime_error("Could not open file " + u3FileName);
-
-  // Read the file into the solution array
-  u1File.read((char *)u_fluid, sizeof(double) * n_size_u);
-  u2File.read((char *)u_fluid + sizeof(double) * n_size_u, sizeof(double) * n_size_u);
-  u3File.read((char *)u_fluid + sizeof(double) * 2 * n_size_u, sizeof(double) * n_size_u);
-
-  // Close the file
-  u1File.close();
-  u2File.close();
-  u3File.close();
-
-
-  // Create a New TOutput3D Object to visualise the Fluid Field., which is read from the file
-  char *VeloVTKBaseName = "Input_Velocity.vtk";
-  TOutput3D *Output_Velo = new TOutput3D(2, 2, 1, 1, Domain);
-  // Add the velocity field to the output
-  Output_Velo->AddFEVectFunct(fevect_b);
-  // Write the VTK file
-  Output_Velo->WriteVtk(VeloVTKBaseName);
-
-  // ==========================================================================================================
-  // Setting up, Drift velocities for each of the internal co-ordinates
-  // ===========================================================================================================
-  // The Drift velocity is defined as the difference in velocity between the Actual fluid velocity and the particle velocity
-  // Refer to Fredrichs-Eulerian Model for further details 
-  // Equation : d(v)/dt = -(v.grad)v - (1/\tau)(v - u) + (1 - mu)g
-
-  // Set up Drift velocity values for each Internal Co-rdinates
-  double** particle_velocity_array = new double*[N_InternalPts]();
-  // Setting FeVect Function for the Drift Velocity for all the internal points
-  TFEVectFunct3D **fevect_drift_array = new TFEVectFunct3D*[N_InternalPts];
-  // Setup Aux Parameters for the Drift Velocity
-  TAuxParam3D **aux_drift_array = new TAuxParam3D*[N_InternalPts];
-
-  // generate drift velocity array and fevect function for all the internal points
-  for (int i = 0; i < N_InternalPts; i++)
-  {
-    // Generate the drift velocity array
-    particle_velocity_array[i] = new double[3 * n_size_u]();
-    // Generate the FeVect Function for the Drift Velocity
-    fevect_drift_array[i] = new TFEVectFunct3D(fespace_b, "u_drift", "u_drift", particle_velocity_array[i], n_size_u, 3);
-  }
-  
-  // Set up the Aux Parameters for the Drift Velocity
-
-  // Set up the aux to pass the velocity field
-  TFESpace3D *fesp_aux[1];
-  fesp_aux[0] = fespace_b;
-  int NSBeginParamVelo[1] = {0};
-  // Here there are 3 fe functions, one for each component of the velocity field
-  // So for each component, we need Values, Derivative_x, Derivative_y, Derivative_z
-  // WE need an array of 6 values, the order in which these values will be passed is given by the NSFEFctIndexVelo
-  // Here it says first 2 values are for the first component, next 2 for the second and last 2 for the third
-  int NSFEFctIndexVelo[6] = {0, 0, 1, 1, 2, 2};
-  // Now, we need to specicify what are the values that need to be passed
-  // Is it the actual values, or the derivative in x, y or z
-  MultiIndex3D NSFEMultiIndexVelo[6] = {D000, D100, D000, D010, D000, D001};
-  // This means, the values will be passed as
-  // [ b_x, d(b_x)/dx, b_y, d(b_y)/dy, b_z, d(b_z)/dz ]
-  ParamFct *NSFctVelo[1] = {b_params_velo};
-
-  // This array is the placeholder for the drift velocity function
-  // This pointer will be updated every
-  TFEFunction3D *fefunct_drift_velocity_placeholder[3];
-  fefunct_drift_velocity_placeholder[0] = fevect_drift_array[0]->GetComponent(0);
-  fefunct_drift_velocity_placeholder[1] = fevect_drift_array[0]->GetComponent(1);
-  fefunct_drift_velocity_placeholder[2] = fevect_drift_array[0]->GetComponent(2);
-
-  // setup aux
-  aux = new TAuxParam3D(1, 3, 1, 3, fesp_aux, fefunct_drift_velocity_placeholder, NSFctVelo, NSFEFctIndexVelo, NSFEMultiIndexVelo, 3, NSBeginParamVelo);
-
-  // Set the FEFunction as 1st internal point to the placeholder
-  aux->SetFEFunctions(fefunct_drift_velocity_placeholder);
-
-  // ==========================================================================================================
-  // Set up System Matrix for the Physical System
-  // ===========================================================================================================
-
-  // Initialize the System Matrix for the Physical System
-  TSystemPBE3D *SystemMatrix = new TSystemPBE3D(mg_level, Scalar_FeSpaces, Sol_array, Rhs_array,
-                                                TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
-
-  // Perform init for the system matrix
-  SystemMatrix->Init_with_NSEValues(BilinearCoeffs, BoundCondition, BoundValue, aux);
-  SystemMatrix->AssembleMRhs();
-
-  // ==========================================================================================================
-  // Set up the particle paramters in the internal system
-  // ===========================================================================================================
-  // particle gravity
-  double g[3] = {0, 0, -9.81};
-  // particle density
-  double *particle_rho = new double[N_InternalPts];
-  // for now, fill the values with 914 for all the internal points
-  for (int i = 0; i < N_InternalPts; i++)
-  {
-    particle_rho[i] = 914;
-  }
-  double fluid_rho = 1.1385;
-  double fluid_viscosity = 0.00001699919285;
-
-  double *internal_values = new double[N_InternalPts]();
-  double* particle_rho_values = new double[N_InternalPts]();
-  double* diameter_values = new double[N_InternalPts]();
-
-  // diameter values are the internal co-ordinates
-  // get FESpace for the internal co-ordinates
-  TFESpace1D *fespace_internal = Internal_System->GetFeSpace1D();
-  TFEFunction1D *fefunction_internal = new TFEFunction1D(fespace_internal, "Internal", "Internal", internal_values, N_InternalPts);
-  fefunction_internal->GridToData();  // Populates the internal values with the values from the grid (l1, l2, l3, ...)
-
-  // loop over all internal points and print the values
-  for (int i = 0; i < N_InternalPts; i++)
-  {
-    diameter_values[i] = internal_values[i];
-  }
-
-  
-  SystemMatrix->Init_for_drift_velocity(fevect_drift_array,  g, fluid_rho, particle_rho_values, fluid_viscosity,
-          N_InternalPts, diameter_values, fevect_b, n_size_u);
-
-  // Initialise the Drift velocity values to be zero
-  // The values are created as 2*n_size_u, with zero as value. 
-
 
   //======================================================================
   // parameters for time stepping scheme
@@ -677,19 +593,6 @@ int main(int argc, char *argv[])
   bool UpdateRhs = TRUE;      // check BilinearCoeffs in example file
   ConvectionFirstTime = TRUE;
 
-  // -  After interpolation, the solution co-ordinates are stored in the solution_all array in Internal-Co-ordinate format
-  // -  The solution is then rearranged to the Physical Co-ordinate format 
-  // Create a new copy of the solution_all array to store the rearranged solution
-  double *solution_all_internal = new double[N_Nodals_All]();
-  memcpy(solution_all_internal, solution_all, N_Nodals_All * SizeOfDouble);
-
-  // Now, rearrange the solution to the physical co-ordinate format
-  Internal2Physical(N_PhySpacePts, N_InternalPts, solution_all_internal, solution_all);
-
-  // Make a copy of the solution to the old solution
-  memcpy(solution_all_old, solution_all, N_Nodals_All * SizeOfDouble);
-
-
   // -- Main Time Looping Starts
   while (TDatabase::TimeDB->CURRENTTIME < end_time)
   {
@@ -708,11 +611,16 @@ int main(int argc, char *argv[])
           OutPut("Theta1: " << TDatabase::TimeDB->THETA1 << endl);
           OutPut("Theta2: " << TDatabase::TimeDB->THETA2 << endl);
           OutPut("Theta3: " << TDatabase::TimeDB->THETA3 << endl);
+          OutPut("Theta4: " << TDatabase::TimeDB->THETA4 << endl);
         }
 
       tau = TDatabase::TimeDB->CURRENTTIMESTEPLENGTH;
       TDatabase::TimeDB->CURRENTTIME += tau;
 
+      // =======================================================================================
+      // Solve the Physical System -- Start
+      // =======================================================================================
+      Internal2Physical(solution_all_old, solution_all, N_PhySpacePts, N_InternalPts);
 
       // copy rhs to oldrhs
       memcpy(oldrhs, rhs, N_PhySpacePts * SizeOfDouble);
@@ -721,17 +629,6 @@ int main(int argc, char *argv[])
       for (int i = 0; i < N_InternalPts; i++)
       {
         cout << "Internal Point: " << i << endl;
-        // Solve Drift velocity for the internal level
-        SystemMatrix->SolveDriftVelocity(tau,i, particle_velocity_array[i]);
-        cout << "Solved for Drift Velocity" << endl;
-
-        // Setup the Drift velocity aux array to point to current internal level
-        fefunct_drift_velocity_placeholder[0] = fevect_drift_array[i]->GetComponent(0);
-        fefunct_drift_velocity_placeholder[1] = fevect_drift_array[i]->GetComponent(1);
-        fefunct_drift_velocity_placeholder[2] = fevect_drift_array[i]->GetComponent(2);
-        aux->SetFEFunctions(fefunct_drift_velocity_placeholder);
-
-        cout << "Aux functions set up " << i << endl;
         // Assign the solution of the current internal point to the solution array
         memcpy(sol, solution_all + i * N_PhySpacePts, N_PhySpacePts * SizeOfDouble);
 
@@ -741,6 +638,7 @@ int main(int argc, char *argv[])
         if (UpdateStiffnessMat || UpdateRhs || ConvectionFirstTime)
         {
           SystemMatrix->AssembleARhs();
+
           // M:= M + (tau*THETA1)*A
           // rhs: =(tau*THETA4)*rhs +(tau*THETA3)*oldrhs +[M-(tau*THETA2)A]*oldsol
           // note! sol contains only the previous time step value, so just pass
@@ -749,47 +647,27 @@ int main(int argc, char *argv[])
           ConvectionFirstTime = FALSE;
         }
 
-        cout << "Assembled System Matrix" << i << endl;
         // solve the system matrix
         SystemMatrix->Solve(sol);
-
-        cout << "Solved System Matrix" << i << endl;
 
         // restore the mass matrix for the next time step
         // unless the stiffness matrix or rhs change in time, it is not necessary to assemble the system matrix in every time step
         if (UpdateStiffnessMat || UpdateRhs)
         {
-          cout << " Called SystemMatrix->RestoreMassMat() " << endl;
           SystemMatrix->RestoreMassMat();
         }
-
-        // copy the solution to the solution_all array
-        memcpy(solution_all + i * N_PhySpacePts, sol, N_PhySpacePts * SizeOfDouble);
       }
+
       // =======================================================================================
       // Solve the Physical System -- End
       // =======================================================================================
       // Rearrange the solution for the internal system
       memcpy(solution_all_old, solution_all, N_Nodals_All * SizeOfDouble);
+      Physical2Internal(solution_all, solution_all_old, N_PhySpacePts, N_InternalPts);
     } // for(l=0;l<N_SubSteps;l++)
 
     // memcpy(IntValue_old, IntValue, N_Xpos * SizeOfDouble);
 
-    // Visualize the solution, Copy the global solution to solution_visualize
-    for (int i = 0 ; i < N_InternalPts; i++)
-      memcpy(solution_visualize[i], solution_all + i * N_PhySpacePts, N_PhySpacePts * SizeOfDouble);
-
-    // Output the solution for all internal layers
-    writeVtkFile(VtkBaseName, img, Output_Intl);
-    cout << "VTK File Written" << endl;
-    img++;
-
     // if(m % TDatabase::TimeDB->STEPS_PER_IMAGE == 0)
   } // while(TDatabase::TimeDB->CURRENTTIME< end_time)
-
-  // Add integral routine to compute the surface deposition for each level in the internal system
-  // i.e Calculate the deposition of l0,l1,l2, ... on the surface 
-
-  // Free the memory
-
 }

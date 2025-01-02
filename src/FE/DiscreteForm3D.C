@@ -3042,6 +3042,31 @@ void InitializeDiscreteFormsScalar(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, 
                           RhsAssemble, LinCoeff, NULL);
 }
 
+
+// Intialize the discrete forms with NSE3D Assemble functions
+void InitializeDiscreteFormsScalarNSE(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin, 
+                                   TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff)
+{
+  cout << " Calling correct function for Initialisation of Discrete forms " << endl;
+  char MMString[] = "Mass matrix";
+  
+   DiscreteFormMRhs_Galerkin = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixMRhs,
+                                 Derivatives_MatrixMRhs, SpacesNumbers_MatrixMRhs, N_Matrices_MatrixMRhs, N_Rhs_MatrixMRhs,
+                                 RowSpace_MatrixMRhs, ColumnSpace_MatrixMRhs, RhsSpace_MatrixMRhs,
+                                 MatrixMRhsAssemble, LinCoeff, NULL);
+
+   DiscreteFormARhs_Galerkin = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                 Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                 N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                 RhsSpace_MatrixARhs, MatrixARhsAssembleNSEValues, LinCoeff, NULL);
+
+   DiscreteFormRhs = new TDiscreteForm3D(MMString, MMString, N_Terms_Rhs, Derivatives_Rhs,
+                          SpacesNumbers_Rhs, N_Matrices_Rhs, N_Rhs_Rhs,
+                          RowSpace_Rhs, ColumnSpace_Rhs, RhsSpace_Rhs,
+                          RhsAssemble, LinCoeff, NULL);
+}
+
+
 void InitializeDiscreteFormRTE(TDiscreteForm3D *&DiscreteFormMBRhs_Galerkin, TDiscreteForm3D *&DiscreteFormRhs_Galerkin, 
                                TDiscreteForm3D *&DiscreteFormBRhs_SUPG, TDiscreteForm3D *&DiscreteFormRhs_SUPG, 
                                CoeffFct3D *LinCoeff)

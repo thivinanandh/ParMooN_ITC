@@ -9,79 +9,30 @@
 
 void ExampleFile()
 {
-  
-  OutPut("Example: rteSpatial.h" << endl);  
+  OutPut("Example: Siminhale_Final_values.h" << endl);  
 }
 
 // ========================================================================
 // definitions for the temperature
 // ========================================================================
 
-void Exact_RTE( double *X, double *values)
-{
-  double t = TDatabase::TimeDB->CURRENTTIME;
-  double k = TDatabase::ParamDB->P0, x, y, z, s1, s2, s3;
-
-  x = X[0];
-  y = X[1]; 
-  z = X[2];
-  s1 = X[3];
-  s2 = X[4];
-  s3 = X[5];
-
-  values[0] = (exp(-k*t))*s1*s2*s3*sin(Pi*x)*sin(Pi*y)*sin(Pi*z);
-}
-
-void Exact( double x, double y, double z, double *values)
-{
- double t = TDatabase::TimeDB->CURRENTTIME;
- double k = TDatabase::ParamDB->P0;
-  
-  double s1 = TDatabase::ParamDB->P11;
-  double s2 = TDatabase::ParamDB->P12;
-  double s3 = TDatabase::ParamDB->P13;
-
-  values[0] = (exp(-k*t))*s1*s2*s3*sin(Pi*x)*sin(Pi*y)*sin(Pi*z);
-  values[1] = Pi*(exp(-k*t))*s1*s2*s3*cos(Pi*x)*sin(Pi*y)*sin(Pi*z);
-  values[2] = Pi*(exp(-k*t))*s1*s2*s3*sin(Pi*x)*cos(Pi*y)*sin(Pi*z);
-  values[3] = Pi*(exp(-k*t))*s1*s2*s3*sin(Pi*x)*sin(Pi*y)*cos(Pi*z);
-  values[4] = -3.*Pi*Pi*(exp(-k*t))*s1*s2*s3*sin(Pi*x)*sin(Pi*y)*sin(Pi*z);
-}
- 
-
 void BoundCondition(int dummy,double x, double y, double z, BoundCond &cond)
 {
-  if (dummy == 0 || dummy == 2)
-      cond = DIRICHLET;
-
-    else
-    {
-      cond = NEUMANN;
-    }
+  cond = NEUMANN;
 }
 
 // value of boundary condition
 void BoundValue(int dummy,double x, double y, double z, double &value)
 {
  double t = TDatabase::TimeDB->CURRENTTIME;
- double k = 0.1;
-  
-  if (dummy == 0)
-  {
-    value = 1;
-  }
-  else
-  {
-    value = 0;
-  }
+  value = 0; // Zero Neumann Everywhere
 }
 
 
-void BilinearCoeffs (int n_points, int N_Dim, double **Coords,
+void BilinearCoeffs_ND(int n_points, int N_Dim, double **Coords,
                         double **param, double **coeffs)
 {
  double eps= 1.0/TDatabase::ParamDB->RE_NR;
-  double eps= 1.0;
   int i;
   double *coeff;                                  // *param;
   double x, y, z, c, a[3], b[3], s[3], h;
@@ -95,14 +46,9 @@ void BilinearCoeffs (int n_points, int N_Dim, double **Coords,
   for(i=0;i<n_points;i++)
   {
     coeff = coeffs[i];
-    // param = parameters[i];
-
-    x = Coords[0][i];
-    y = Coords[1][i];
-    z = Z[i];
-
+    // param = parameters[i]
     // diffusion
-    coeff[0] = eps;
+    coeff[0] = 1e-6;
     // convection in x direction
     coeff[1] = b[0];
     // convection in y direction
@@ -112,50 +58,9 @@ void BilinearCoeffs (int n_points, int N_Dim, double **Coords,
     // reaction
     coeff[4] = c;
      // rhs
-    coeff[5] = (3.*eps*Pi*Pi - 0.1)*(exp(-0.1*t))*sin(Pi*x)*cos(Pi*y)*cos(Pi*z);
+    coeff[5] = 0;
     coeff[6] = 0;
 }
-
-// ========================================================================
-void BilinearCoeffs(int n_points, double *X, double *Y, double *Z,
-               double **parameters, double **coeffs)
-{
-//   double eps= 1.0/TDatabase::ParamDB->RE_NR;
-  double eps= 1.0;
-  int i;
-  double *coeff;                                  // *param;
-  double x, y, z, c, a[3], b[3], s[3], h;
-  double t = TDatabase::TimeDB->CURRENTTIME;
-  
-  b[0] = 0;
-  b[1] = 0;
-  b[2] = 0;  
-  c = 0;
-
-  for(i=0;i<n_points;i++)
-  {
-    coeff = coeffs[i];
-    // param = parameters[i];
-
-    x = X[i];
-    y = Y[i];
-    z = Z[i];
-
-    // diffusion
-    coeff[0] = eps;
-    // convection in x direction
-    coeff[1] = b[0];
-    // convection in y direction
-    coeff[2] = b[1];
-    // convection in z direction
-    coeff[3] = b[2];
-    // reaction
-    coeff[4] = c;
-     // rhs
-    coeff[5] = (3.*eps*Pi*Pi - 0.1)*(exp(-0.1*t))*sin(Pi*x)*cos(Pi*y)*cos(Pi*z);
-    coeff[6] = 0;
-
-  }
 }
 
 void GetKernel(int N_Inputs, double *Inn, double *Out) 
@@ -176,7 +81,30 @@ void InitialValue(int N_Inputs, double *Inn, double *Out)
   double y = Inn[1];
   double z = Inn[2];
   double l1 = Inn[3];
-  Out[0] = l1;
+  
+  // Calculate the distance from the origin (0, 0) in the xz-plane
+  double distance = sqrt(x * x + z * z);
+  double distance_threshold = 0.5 * 0.5; // 0.95 times the radius of the unit circle
+  
+  // Check if the point (x, z) lies within the threshold distance and y <= 0.01
+  if (distance <= distance_threshold && y <= 0.01) {
+    // Assign out[x] values based on l1 ranges
+    const double epsilon = 1e-6;
+
+    if (fabs(l1 - 0.1) <= epsilon) {
+      Out[0] = 100;
+    } else if (fabs(l1 - 0.325) <= epsilon) {
+      Out[0] = 200;
+    } else if (fabs(l1 - 0.55) <= epsilon) {
+      Out[0] = 300;
+    } else if (fabs(l1 - 0.775) <= epsilon) {
+      Out[0] = 400;
+    } else {
+      Out[0] = 500;
+    }
+  } else {
+    Out[0] = 0;
+  }
 }
 
 
@@ -201,7 +129,7 @@ void GetRhs(int N_Inputs, double *Inn, double *Out)
 
 }
 // ========================================================================
-// BilinearCoeffs for RTE in x-direction
+// BilinearCoeffs for PBE in Physical Co-oridnates
 // ========================================================================
 void BilinearCoeffs(int n_points, double *X, double *Y, double *Z,
                double **parameters, double **coeffs)
@@ -211,18 +139,6 @@ void BilinearCoeffs(int n_points, double *X, double *Y, double *Z,
   double x, y, z, c, a[3],s[3], h;
   double expt;
   
-  alpha = TDatabase::ParamDB->P0;
-  sigma_a = TDatabase::ParamDB->P1;
-  sigma_s = TDatabase::ParamDB->P2;
-  expt = exp(-alpha*TDatabase::TimeDB->CURRENTTIME);
-  double diffusion, PE_NR = TDatabase::ParamDB->PE_NR;
-
-  if(PE_NR==0.)
-   { diffusion = 0;}
-  else
-   {diffusion = 1./PE_NR;}
-
-  alpha = -alpha + 3.*Pi*Pi*diffusion;
 
   for(i=0;i<n_points;i++)
   {
@@ -230,21 +146,13 @@ void BilinearCoeffs(int n_points, double *X, double *Y, double *Z,
     x = X[i];
     y = Y[i];
     z = Z[i];
-
-    spx = sin(Pi*x);
-    spy = sin(Pi*y);
-    spz = sin(Pi*z);
-   
     // diffusion
-    coeff[0] = diffusion;
+    coeff[0] = 1e-1;
+    // Advection values are infered from internal Fluid Velocity
     // reaction
     coeff[4] = 0.;
-
-     // rhs
-    coeff[1] = Pi*cos(Pi*x)*spy*spz*expt;  // s1 part
-    coeff[2] = Pi*spx*cos(Pi*y)*spz*expt;  // s2 part
-    coeff[3] = Pi*spx*spy*cos(Pi*z)*expt;  // s3 part
-    coeff[5] = alpha*expt*spx*spy*spz;  // f
+    // External Forcing
+    coeff[5] = 0.;
   }
 }
 
@@ -304,114 +212,7 @@ void SurfBoundValue(int BdComp, double Param, double &value)
 }
 
 
-void InitialS(double x, double y, double *values)
-{
-   double h, r;
 
- double t = TDatabase::TimeDB->CURRENTTIME;
-//  if(fabs(x)<1e-5  && fabs(y)<1e-5 )
-//  cout << "InitialS : x : " << x << " y : " << y <<endl;
-
-  values[0] = exp(-6.*t)*x*y;
-  values[1] = 0;
-  values[2] = 0;
-  values[3] = 0;
-  values[4] = 0;
-  cout << "Error!! Check the Example file "<<endl;
-  exit(0);
-
-}
-void ExactS(double x, double y, double *values)
-{
-
-
-  cout << "Error!! Check the Example file "<<endl;
-  exit(0);
-
- double t = TDatabase::TimeDB->CURRENTTIME;
-  values[0] = exp(-6.*t)*x*y;
-  values[1] = exp(-6.*t)*y;
-  values[2] = exp(-6.*t)*x;
-  values[3] = 0;
-  values[4] = 0;
-
-}
-
-void InitialSall(double x, double y,  double z, double *values)
-{
- double t = TDatabase::TimeDB->CURRENTTIME;
-  values[0] = x*y*exp(-6.*t);
-}
-
-void ExactSall_oldStep(double x, double y,  double z, double *values)
-{
- double t = TDatabase::ParamDB->P14; // old time step should be storen in main prgram
-
-  values[0] = x*y*exp(-6.*t);
-  values[1] = exp(-6.*t)*y;
-  values[2] = exp(-6.*t)*x;
-  values[3] = 0;
-  values[4] = 0;
-}
-
-
-void ExactSall(double x, double y,  double z, double *values)
-{
- double t = TDatabase::TimeDB->CURRENTTIME;
-
-  values[0] = x*y*exp(-6.*t);
-  values[1] = exp(-6.*t)*x;
-  values[2] = exp(-6.*t)*y;
-  values[3] = 0;
-  values[4] = 0;
-}
-
-void SurfAllCoeffs(int n_points, double *X, double *Y, double *Z,
-               double **parameters, double **coeffs)
-{
-  static double eps = 1.;
-  int i;
-  double *coeff, x, y, z;
-
-  for(i=0;i<n_points;i++)
-  {
-    coeff = coeffs[i];
-
-    coeff[0] = eps;
-    coeff[1] = 0;
-    coeff[2] = 0;
-    coeff[3] = 0;
-
-  }
-
-  cout << "Error!! Check the Example file "<<endl;
-  exit(0);
-
-}
-
-
-void SurfCoeffs(int n_points, double *x, double *y,
-        double **parameters, double **coeffs)
-{
-  int i;
-  double *coeff;
-  double r2;
-  static double eps = 1./TDatabase::ParamDB->RE_NR;
-
-  for(i=0;i<n_points;i++)
-   {
-    coeff = coeffs[i];
-    coeff[0] = eps;   // eps
-
-    if(TDatabase::ParamDB->FR_NR == 0)
-       coeff[1] = 0;
-    else
-       coeff[1] = TDatabase::ParamDB->FR_NR;
-
-   }
-  cout << "Error!! Check the Example file "<<endl;
-  exit(0);
-}
 
 
 //// ------------- SIMINHALE THIVIN -----------------////
@@ -590,8 +391,8 @@ void GrowthAndB_Nuc_L0(int N_Inputs, double *Inn, double *Out)
     // exit(0);
    }  
 
-  Out[0] = 1; // growth is 1
-  Out[1] = B_Nuc; 
+  Out[0] = 0; // growth is 1
+  Out[1] = 0; 
   Out[2] = 0; //L_Max Bound value,  if DIRICHLET 
     // cout << "B_Nuc: " <<  Out[1] <<endl;
 }
@@ -610,7 +411,7 @@ void GrowthAndB_Nuc_L0(int N_Inputs, double *Inn, double *Out)
    L_StartEnd[1] = 1.0;
    
    // Number of cells in domain
-   L_NVertices[0] = 4;
+   L_NVertices[0] = 1;
    
    // Growth and Nucleation Kernels
    GrowthAndB_Nuc[0] = GrowthAndB_Nuc_L0;

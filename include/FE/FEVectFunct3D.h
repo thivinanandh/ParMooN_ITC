@@ -42,6 +42,9 @@ class TFEVectFunct3D : public TFEFunction3D
     /** convert current grid to vector-values FE function */
     void GridToData();
 
+    /** convert current grid to vector-values FE function along with cell-id*/
+    void GridToDataWithCellid();
+
     /** use current data for grid replacement */
     void DataToGrid();
 

@@ -135,6 +135,102 @@ void TFEVectFunct3D::GridToData()
   } // endfor i
 }
 
+
+
+/** convert current grid to vector-values FE function */
+// Same as Grid to data, but populates the cell-id in the 4th component
+// This allows to identify the cell-id of the point and perform easy interpolation
+void TFEVectFunct3D::GridToDataWithCellid()
+{
+  int i,j,k,l;
+  TBaseCell *cell;
+  TCollection *Coll;
+  FE3D FEId;
+  TFE3D *Element;
+  BaseFunct3D BF;
+  TNodalFunctional3D *nf;
+  int N_Cells;
+  int N_LocalDOFs;
+  int *BeginIndex, *GlobalNumbers;
+  int N_, N_Points;
+  double s, *xi, *eta, *zeta;
+  double Val[MaxN_BaseFunctions3D];
+  double OutVal[MaxN_BaseFunctions3D];
+  int *DOF, Index;
+  RefTrans3D F_K;
+  TRefTrans3D *rt;
+  double X[MaxN_PointsForNodal3D], Y[MaxN_PointsForNodal3D];
+  double Z[MaxN_PointsForNodal3D];
+  double AbsDetjk[MaxN_PointsForNodal3D];
+  double FunctionalValuesX[MaxN_PointsForNodal3D];
+  double FunctionalValuesY[MaxN_PointsForNodal3D];
+  double FunctionalValuesZ[MaxN_PointsForNodal3D];
+  double FctVal[8];
+
+  // begin code
+  
+  Coll = FESpace3D->GetCollection();
+  N_Cells = Coll->GetN_Cells();
+  BeginIndex = FESpace3D->GetBeginIndex();
+  GlobalNumbers = FESpace3D->GetGlobalNumbers();
+
+  for(i=0;i<N_Cells;i++)
+  {
+    // cout << "cell: " << i << endl;
+    cell = Coll->GetCell(i);
+    FEId = FESpace3D->GetFE3D(i, cell);
+    Element = TFEDatabase3D::GetFE3D(FEId);
+    nf = Element->GetNodalFunctional3D();
+    nf->GetPointsForAll(N_Points, xi, eta, zeta);
+    N_LocalDOFs = Element->GetN_DOF();
+
+    F_K = Element->GetRefTransID();
+
+    switch(F_K)
+    {
+      case HexaAffin:
+        rt = TFEDatabase3D::GetRefTrans3D(HexaAffin);
+        ((THexaAffin *)rt)->SetCell(cell);
+        break;
+      case HexaTrilinear:
+        rt = TFEDatabase3D::GetRefTrans3D(HexaTrilinear);
+        ((THexaTrilinear *)rt)->SetCell(cell);
+        break;
+      case HexaIsoparametric:
+        rt = TFEDatabase3D::GetRefTrans3D(HexaIsoparametric);
+        ((THexaIsoparametric *)rt)->SetCell(cell);
+        break;
+      case TetraAffin:
+        rt = TFEDatabase3D::GetRefTrans3D(TetraAffin);
+        ((TTetraAffin *)rt)->SetCell(cell);
+        break;
+      case TetraIsoparametric:
+        rt = TFEDatabase3D::GetRefTrans3D(TetraIsoparametric);
+        ((TTetraIsoparametric *)rt)->SetCell(cell);
+        break;
+    }
+    TFEDatabase3D::GetOrigFromRef(F_K, N_Points, xi, eta, zeta,
+                                X, Y, Z, AbsDetjk);
+
+    nf->GetAllFunctionals(Coll, cell, X, FunctionalValuesX);
+    nf->GetAllFunctionals(Coll, cell, Y, FunctionalValuesY);
+    nf->GetAllFunctionals(Coll, cell, Z, FunctionalValuesZ);
+
+    DOF = GlobalNumbers+BeginIndex[i];
+
+    for(j=0;j<N_LocalDOFs;j++)
+    {
+      k = DOF[j];
+      Values[k] = FunctionalValuesX[j];
+      Values[k+Length] = FunctionalValuesY[j];
+      Values[k+2*Length] = FunctionalValuesZ[j];
+      Values[k+3*Length] = i;
+      // cout << k << " " << Values[k] << " " << Values[k+Length] << " ";
+      // cout << Values[k+2*Length] << endl;
+    }
+  } // endfor i
+}
+
 /** use current data for grid replacement */
 void TFEVectFunct3D::DataToGrid()
 {
