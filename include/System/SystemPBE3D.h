@@ -14,6 +14,9 @@
 #include <SquareMatrix3D.h>
 #include <SystemCD3D.h>
 
+// Include Intel Pardiso Solver
+#include <IntelPardisoSolver.h>
+
 /**class for 3D scalar system matrix */
 class TSystemPBE3D : public TSystemCD3D
 {
@@ -50,6 +53,10 @@ class TSystemPBE3D : public TSystemCD3D
     
     /** Systmat assemble indicator */
     bool SystMatAssembled;
+
+    // Create an instance of the Intel Pardiso Solver
+     IntelPardisoSolver *pardiso_solver = new IntelPardisoSolver();
+ 
     
   public:
     /** constructor */
@@ -109,6 +116,10 @@ class TSystemPBE3D : public TSystemCD3D
     
      /** solve the system matrix */
     void Solve(double *sol);  
+
+    /** solve the system matrix */
+    void  Solve_Pardiso(double *sol, int iter_num);
+  
     
     /** return the residual of the system for the given sol*/
     double GetResidual(double *sol);

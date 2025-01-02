@@ -82,12 +82,12 @@ void InitialValue(int N_Inputs, double *Inn, double *Out)
   double z = Inn[2];
   double l1 = Inn[3];
   
-  // Calculate the distance from the origin (0, 0) in the xz-plane
-  double distance = sqrt(x * x + z * z);
+  // Calculate the distance from the origin (0, 0) in the yz-plane
+  double distance = sqrt(y * y + z * z);
   double distance_threshold = 0.5 * 0.5; // 0.95 times the radius of the unit circle
   
-  // Check if the point (x, z) lies within the threshold distance and y <= 0.01
-  if (distance <= distance_threshold && y <= 0.01) {
+  // Check if the point (x, z) lies within the threshold distance and x <= 0.01
+  if (distance <= distance_threshold && x <= 0.01) {
     // Assign out[x] values based on l1 ranges
     const double epsilon = 1e-6;
 

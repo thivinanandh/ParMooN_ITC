@@ -50,6 +50,8 @@
 #include <sstream>
 #include <iomanip>
 
+#include<omp.h>
+
 double bound = 0;
 double timeC = 0;
 // =======================================================================
@@ -124,6 +126,9 @@ int main(int argc, char *argv[])
 
   TDomain *Domain, *Domain_Solid;
   TDatabase *Database = new TDatabase();
+
+  //Thivin - set omp max number of threads
+  omp_set_num_threads(omp_get_max_threads());
 
   bool UpdateStiffnessMat, UpdateOnlyRhs, ConvectionFirstTime;
 
@@ -427,18 +432,24 @@ int main(int argc, char *argv[])
   // -- OUTPUT SETUP FOR VISUALISATION ---- //
   // Create an double array to store the solution of the internal system
   double **solution_visualize = new double *[N_InternalPts];
+  double **drift_solution_visualize = new double *[N_InternalPts];  // To visualise drift velocity  
   for (int i = 0; i < N_InternalPts; ++i)
   {
     solution_visualize[i] = new double[N_PhySpacePts]();
+    drift_solution_visualize[i] = new double[N_PhySpacePts]();  // To visualise drift velocity
   }
 
   // Generate Individual FEFunctions for the internal system
   TFEFunction3D **Scalar_FeFunctions_Intl = new TFEFunction3D *[N_InternalPts];
+  TFEFunction3D **Drift_FeFunctions_Intl = new TFEFunction3D *[N_InternalPts];  // To visualise drift velocity
   for (int i = 0; i < N_InternalPts; i++)
   {
     char name[10];
     sprintf(name, "Intl_%d", i);
     Scalar_FeFunctions_Intl[i] = new TFEFunction3D(Scalar_FeSpaces[mg_level - 1], name, name, solution_visualize[i], N_PhySpacePts);
+    char name_drift[10];
+    sprintf(name_drift, "Drift_%d", i);
+    Drift_FeFunctions_Intl[i] = new TFEFunction3D(Scalar_FeSpaces[mg_level - 1], name_drift, name_drift, drift_solution_visualize[i], N_PhySpacePts);  // To visualise drift velocity
   }
 
   // ---------- Obtain the alternate order of the solution for VTK output
@@ -465,20 +476,27 @@ int main(int argc, char *argv[])
   VtkBaseName = "Initial_interpolation";
 
   TOutput3D *Output_Intl = new TOutput3D(2, 2, 1, 1, Domain);
+  TOutput3D *Output_DriftVelocity = new TOutput3D(2, 2, 1, 1, Domain);
 
-  // Add all the internal levels for visualisation
+
+  // Add all the internal levels for visualisation of Solution
   for (int i = 0; i < N_InternalPts; i++)
     Output_Intl->AddFEFunction(Scalar_FeFunctions_Intl[i]);
+  
+  // Add all the internal levels for visualisation of Drift Velocity
+  for (int i = 0; i < N_InternalPts; i++)
+    Output_DriftVelocity->AddFEFunction(Drift_FeFunctions_Intl[i]);
 
   // Output the solution for all internal layers
   writeVtkFile(VtkBaseName, i, Output_Intl);
+  writeVtkFile("Drift_Velocity", i, Output_DriftVelocity);
   img++;
 
   // ==========================================================================================================
   // Read the Velocity Field values
   // ===========================================================================================================
   // setup a fevect function 3d
-  // Create a new fespace with order-2, to store the NSE2D Values, the boundary condition here does not matter
+  // Create a new fespace with order - 2, to store the NSE2D Values, the boundary condition here does not matter
   // Here FE Order 2 is used because, the velocities generally stored as second order solutions
   TFESpace3D *fespace_b = new TFESpace3D(coll, "u_fluid", "u_fluid", BoundCondition, 2); 
 
@@ -500,8 +518,6 @@ int main(int argc, char *argv[])
                                                       TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
   SystemMatrix_dummy->Init(BilinearCoeffs, BoundCondition, BoundValue, NULL);
   SystemMatrix_dummy->AssembleARhs();
-
-
 
 
   double *u_fluid = new double[3 * n_size_u]();
@@ -624,16 +640,16 @@ int main(int argc, char *argv[])
   // Set up the particle paramters in the internal system
   // ===========================================================================================================
   // particle gravity
-  double g[3] = {0, 0, -9.81};
+  double g[3] = {0, -9.81, 0};
   // particle density
   double *particle_rho = new double[N_InternalPts];
   // for now, fill the values with 914 for all the internal points
   for (int i = 0; i < N_InternalPts; i++)
   {
-    particle_rho[i] = 914;
+    particle_rho[i] = 1000;
   }
-  double fluid_rho = 1.1385;
-  double fluid_viscosity = 0.00001699919285;
+  double fluid_rho = 1;
+  double fluid_viscosity = 0.00001;
 
   double *internal_values = new double[N_InternalPts]();
   double* particle_rho_values = new double[N_InternalPts]();
@@ -679,7 +695,7 @@ int main(int argc, char *argv[])
 
   // -  After interpolation, the solution co-ordinates are stored in the solution_all array in Internal-Co-ordinate format
   // -  The solution is then rearranged to the Physical Co-ordinate format 
-  // Create a new copy of the solution_all array to store the rearranged solution
+  // - Create a new copy of the solution_all array to store the rearranged solution
   double *solution_all_internal = new double[N_Nodals_All]();
   memcpy(solution_all_internal, solution_all, N_Nodals_All * SizeOfDouble);
 
@@ -695,6 +711,7 @@ int main(int argc, char *argv[])
   {
     m++;
     TDatabase::TimeDB->INTERNAL_STARTTIME = TDatabase::TimeDB->CURRENTTIME;
+    cout << "Entering Time Loop: " << m << endl;
 
     for (l = 0; l < N_SubSteps; l++) // sub steps of fractional step theta
     {
@@ -713,17 +730,19 @@ int main(int argc, char *argv[])
       tau = TDatabase::TimeDB->CURRENTTIMESTEPLENGTH;
       TDatabase::TimeDB->CURRENTTIME += tau;
 
+      OutPut(endl << "CURRENT TIME: "<<TDatabase::TimeDB->CURRENTTIME << endl);
+
 
       // copy rhs to oldrhs
       memcpy(oldrhs, rhs, N_PhySpacePts * SizeOfDouble);
-
+      // cout << "Number of Internal Points: " << N_InternalPts << endl;
       // loop over all the internal Co-ordinates
       for (int i = 0; i < N_InternalPts; i++)
       {
-        cout << "Internal Point: " << i << endl;
+        // cout << "Internal Point : " << i << endl;
         // Solve Drift velocity for the internal level
         SystemMatrix->SolveDriftVelocity(tau,i, particle_velocity_array[i]);
-        cout << "Solved for Drift Velocity" << endl;
+        // cout << "Solved for Drift Velocity" << endl;
 
         // Setup the Drift velocity aux array to point to current internal level
         fefunct_drift_velocity_placeholder[0] = fevect_drift_array[i]->GetComponent(0);
@@ -731,7 +750,7 @@ int main(int argc, char *argv[])
         fefunct_drift_velocity_placeholder[2] = fevect_drift_array[i]->GetComponent(2);
         aux->SetFEFunctions(fefunct_drift_velocity_placeholder);
 
-        cout << "Aux functions set up " << i << endl;
+        // cout << "Aux functions set up " << i << endl;
         // Assign the solution of the current internal point to the solution array
         memcpy(sol, solution_all + i * N_PhySpacePts, N_PhySpacePts * SizeOfDouble);
 
@@ -749,19 +768,25 @@ int main(int argc, char *argv[])
           ConvectionFirstTime = FALSE;
         }
 
-        cout << "Assembled System Matrix" << i << endl;
+        // cout << "Assembled System Matrix" << i << endl;
         // solve the system matrix
-        SystemMatrix->Solve(sol);
+        SystemMatrix->Solve_Pardiso(sol, m-1);
 
-        cout << "Solved System Matrix" << i << endl;
+        // Get residual
+        double residual = SystemMatrix->GetResidual(sol);
+        cout << "Internal Level: " << i << " Residual: " << residual << endl;
+
+        // cout << "Solved System Matrix" << i << endl;
 
         // restore the mass matrix for the next time step
         // unless the stiffness matrix or rhs change in time, it is not necessary to assemble the system matrix in every time step
         if (UpdateStiffnessMat || UpdateRhs)
         {
-          cout << " Called SystemMatrix->RestoreMassMat() " << endl;
+          // cout << " Called SystemMatrix->RestoreMassMat() " << endl;
           SystemMatrix->RestoreMassMat();
         }
+
+        
 
         // copy the solution to the solution_all array
         memcpy(solution_all + i * N_PhySpacePts, sol, N_PhySpacePts * SizeOfDouble);
@@ -778,9 +803,15 @@ int main(int argc, char *argv[])
     // Visualize the solution, Copy the global solution to solution_visualize
     for (int i = 0 ; i < N_InternalPts; i++)
       memcpy(solution_visualize[i], solution_all + i * N_PhySpacePts, N_PhySpacePts * SizeOfDouble);
+    
+    // cout<< "Copying the solution to the drift velocity" << endl;
+    for (int i = 0 ; i < N_InternalPts; i++)
+      memcpy(drift_solution_visualize[i], particle_velocity_array[i], N_PhySpacePts * SizeOfDouble);
+
 
     // Output the solution for all internal layers
     writeVtkFile(VtkBaseName, img, Output_Intl);
+    writeVtkFile("Drift_Velocity", img, Output_DriftVelocity);
     cout << "VTK File Written" << endl;
     img++;
 

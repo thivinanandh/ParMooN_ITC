@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 TSystemPBE3D::TSystemPBE3D(int N_levels, TFESpace3D **fespaces, double **sol, double **rhs, int disctype, int solver)
                           :TSystemCD3D(N_levels, fespaces, sol, rhs, disctype, solver)
 {
@@ -381,7 +382,7 @@ void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, doubl
     //   vel_y_gradient_z = 0;
     // }
 
-    double diameter = m_diameter_values[internal_level] * 1e-6; // Convert to meters
+    double diameter = m_diameter_values[internal_level] * 1e-10; // Convert to meters
     double tau = (m_particle_rho[internal_level] * diameter * diameter) / (18 * m_fluid_viscosity);
 
     double gamma = 0.001;
@@ -629,6 +630,43 @@ void TSystemPBE3D::Solve(double *sol)
      }
      
 }
+
+
+void TSystemPBE3D::Solve_Pardiso(double *sol, int iter_num)
+{  
+    switch(SOLVER)
+     {
+
+      case DIRECT:
+#ifdef _MPI
+	TDS->Solve(sol, B, factorize);
+// 	exit(0);
+#endif
+
+#ifdef _OMPONLY
+	if(TDatabase::ParamDB->DSType == 1)
+	  DS->Solve(sol, B, factorize);
+	else{
+	  OutPut("Select Proper Solver" << endl);
+	  exit(0);
+	}
+#endif
+
+#ifdef _SEQ
+        // DirectSolver(sqmatrixM[N_Levels-1], B, sol);
+        PardisoDirectSolverWithObject(sqmatrixM[N_Levels-1], B, sol, iter_num, pardiso_solver);
+#endif
+	//this is set to false for direct solver factorization
+        factorize = false;
+      break;      
+ 
+      default:
+            OutPut("Unknown Solver" << endl);
+            exit(4711);;
+     }
+     
+}
+
 
 double TSystemPBE3D::GetResidual(double *sol)
 {
