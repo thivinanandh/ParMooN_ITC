@@ -18,41 +18,50 @@
 #ifdef __3D__
 #include <SquareMatrix3D.h>
 #include <Matrix3D.h>
+
+// Thivin -- Added Intel Pardiso Solver Class
+#include <IntelPardisoSolver.h>
 #endif
 
 class TDirectSolver
 {
   public:
-    TDirectSolver() {};
-    
-    virtual ~TDirectSolver() {};
-    
-#ifdef __3D__
-    /** NSTYPE 2 */
+    TDirectSolver() {
+
+    };
+
+    // Rest of your code remains the same...
+    #ifdef __3D__
     virtual void SetMatrix(TSquareMatrix3D *sqmatrixA,
-		   TMatrix3D *matrixB1T, TMatrix3D *matrixB2T, TMatrix3D *matrixB3T,
-		   TMatrix3D *matrixB1, TMatrix3D *matrixB2, TMatrix3D *matrixB3) = 0;
-		   
-    /** NSTYPE 4 */
+               TMatrix3D *matrixB1T, TMatrix3D *matrixB2T, TMatrix3D *matrixB3T,
+               TMatrix3D *matrixB1, TMatrix3D *matrixB2, TMatrix3D *matrixB3) = 0;
+    
     virtual void SetMatrix(TSquareMatrix3D *sqmatrixA11, TSquareMatrix3D *sqmatrixA12,
-		      TSquareMatrix3D *sqmatrixA13, TSquareMatrix3D *sqmatrixA21,
-		      TSquareMatrix3D *sqmatrixA22, TSquareMatrix3D *sqmatrixA23,
-		      TSquareMatrix3D *sqmatrixA31, TSquareMatrix3D *sqmatrixA32,
-		      TSquareMatrix3D *sqmatrixA33,
-		      TMatrix3D *matrixB1T, TMatrix3D *matrixB2T, TMatrix3D *matrixB3T,
-		      TMatrix3D *matrixB1, TMatrix3D *matrixB2, TMatrix3D *matrixB3) = 0;
-#endif
+                  TSquareMatrix3D *sqmatrixA13, TSquareMatrix3D *sqmatrixA21,
+                  TSquareMatrix3D *sqmatrixA22, TSquareMatrix3D *sqmatrixA23,
+                  TSquareMatrix3D *sqmatrixA31, TSquareMatrix3D *sqmatrixA32,
+                  TSquareMatrix3D *sqmatrixA33,
+                  TMatrix3D *matrixB1T, TMatrix3D *matrixB2T, TMatrix3D *matrixB3T,
+                  TMatrix3D *matrixB1, TMatrix3D *matrixB2, TMatrix3D *matrixB3) = 0;
+    #endif
     
     virtual void Analyse() = 0;
     virtual void Factorize() = 0;
     virtual void Solve(double *sol, double *rhs) = 0;
     virtual void FactorizeSolve(double *sol, double *rhs) = 0;
-    
 };
+
+
+/** Setup pardiso */
+
 
 /** solve equation system */
 
 void DirectSolver(TSquareMatrix *matrix, double *rhs, double *sol);
+
+// Thivin -- For 3D 
+void PardisoDirectSolverWithObject(TSquareMatrix *matrix, double *rhs, double *sol,int iter_num, IntelPardisoSolver *pardiso_solver); 
+
 void DirectSolver(TSquareMatrix *matrix, double *rhs, double *sol, double *&Values,
                    int *&KCol, int *&Row, void *&Symbolic, void *&Numeric, int rb_flag);
 
@@ -200,6 +209,29 @@ void DirectSolver(TSquareMatrix3D **sqmatrices, int n_row, int n_column,
 void DirectSolver(TSquareMatrix3D **sqmatrices, int n_row, int n_column,
                   double *sol, double *rhs, double *&Entries,
                    int *&KCol, int *&RowPtr, void *&Symbolic, void *&Numeric, int rb_flag);
+
+
+void solve_pardiso(int N_DOF, int *rowptr, int *colIndex, double *entries, double *rhs, double *sol);
+
+void PardisoDirectSolverWithObject(TSquareMatrix3D *sqmatrixA11, TSquareMatrix3D *sqmatrixA12,
+						 TSquareMatrix3D *sqmatrixA13,
+						 TSquareMatrix3D *sqmatrixA21, TSquareMatrix3D *sqmatrixA22,
+						 TSquareMatrix3D *sqmatrixA23,
+						 TSquareMatrix3D *sqmatrixA31, TSquareMatrix3D *sqmatrixA32,
+						 TSquareMatrix3D *sqmatrixA33,
+						 TMatrix3D *matrixB1T, TMatrix3D *matrixB2T, TMatrix3D *matrixB3T,
+						 TMatrix3D *matrixB1, TMatrix3D *matrixB2, TMatrix3D *matrixB3,
+						 double *rhs, double *sol, int flag, IntelPardisoSolver *pardiso_obj);
+
+void PardisoDirectSolver(TSquareMatrix3D *sqmatrixA11, TSquareMatrix3D *sqmatrixA12,
+						 TSquareMatrix3D *sqmatrixA13,
+						 TSquareMatrix3D *sqmatrixA21, TSquareMatrix3D *sqmatrixA22,
+						 TSquareMatrix3D *sqmatrixA23,
+						 TSquareMatrix3D *sqmatrixA31, TSquareMatrix3D *sqmatrixA32,
+						 TSquareMatrix3D *sqmatrixA33,
+						 TMatrix3D *matrixB1T, TMatrix3D *matrixB2T, TMatrix3D *matrixB3T,
+						 TMatrix3D *matrixB1, TMatrix3D *matrixB2, TMatrix3D *matrixB3,
+						 double *rhs, double *sol, int flag);
 
 #endif
 #endif

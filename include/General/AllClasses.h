@@ -39,6 +39,8 @@ class TFE2D;
 class TFE3D;
 class TFEDatabase2D;
 class TFEDatabase3D;
+//Thivin
+class TDirectSolver;
 class TFEDesc1D;
 class TFEDesc2D;
 class TFEDesc3D;

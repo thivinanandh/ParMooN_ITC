@@ -34,6 +34,10 @@
 #include <MeshPartition.h>
 #endif
 
+// Thivin -- Added for parallel Pardiso Solver
+#include <omp.h>
+#include <fstream>
+
 double bound = 0;
 double timeC = 0;
 
@@ -48,6 +52,47 @@ double timeC = 0;
  #include "../Examples/NSE_3D/Bent_pipe.h"
 // #include "../Examples/NSE_3D/StaticBubble.h"
 //  #include "../Examples/NSE_3D/DrivenCavity3D.h"
+
+void WriteSolution(double* sol, int N_U, int sol_num)
+{
+    // Create filenames with padding
+    int padding = 6 - std::to_string(sol_num).length();
+    std::string u1FileName = "Solution_u_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+    std::string u2FileName = "Solution_v_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+    std::string w3FileName = "Solution_w_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+
+    // Open files for binary writing
+    std::ofstream u1File(u1FileName, std::ios::out | std::ios::binary);
+    std::ofstream u2File(u2FileName, std::ios::out | std::ios::binary);
+    std::ofstream u3File(w3FileName, std::ios::out | std::ios::binary);
+
+    // Check if files are opened successfully
+    if (!u1File.is_open())
+        throw std::runtime_error("Could not create file " + u1FileName);
+    if (!u2File.is_open())
+        throw std::runtime_error("Could not create file " + u2FileName);
+    if (!u3File.is_open())
+        throw std::runtime_error("Could not create file " + w3FileName);
+
+    // Write each component to separate files
+    // u component (first N_U elements)
+    u1File.write(reinterpret_cast<const char*>(sol), sizeof(double) * N_U);
+    
+    // v component (second N_U elements)
+    u2File.write(reinterpret_cast<const char*>(sol + N_U), sizeof(double) * N_U);
+    
+    // w component (third N_U elements)
+    u3File.write(reinterpret_cast<const char*>(sol + 2 * N_U), sizeof(double) * N_U);
+
+    // Close all files
+    u1File.close();
+    u2File.close();
+    u3File.close();
+
+    cout << "[INFO] : Solution files written successfully" << endl;
+}
+
+
 // =======================================================================
 // main program
 // =======================================================================
@@ -69,6 +114,9 @@ int main(int argc, char* argv[])
   
   TDomain *Domain;
   TDatabase *Database = new TDatabase();
+
+  //Set pardiso number of threads
+  omp_set_num_threads(42);
   
   int profiling;
 #ifdef _MPI
@@ -157,8 +205,8 @@ int main(int argc, char* argv[])
       Domain->Init(TDatabase::ParamDB->BNDFILE, TDatabase::ParamDB->GEOFILE); } // ParMooN  build-in Geo mesh
   else if(TDatabase::ParamDB->MESH_TYPE==1)  
      {Domain->GmshGen(TDatabase::ParamDB->GEOFILE); }//gmsh mesh
-  else if(TDatabase::ParamDB->MESH_TYPE==2)   
-    {Domain->TetrameshGen(TDatabase::ParamDB->GEOFILE); } //tetgen mesh
+  // else if(TDatabase::ParamDB->MESH_TYPE==2)   
+  //   {Domain->TetrameshGen(TDatabase::ParamDB->GEOFILE); } //tetgen mesh
     else
      {  
       OutPut("Mesh Type not known, set MESH_TYPE correctly!!!" << endl);
@@ -525,6 +573,12 @@ int main(int argc, char* argv[])
      if(TDatabase::ParamDB->INTERNAL_PROJECT_PRESSURE)
        IntoL20Vector3D(defect+3*N_U, N_P, pressure_space_code);
     
+    if(TDatabase::ParamDB->INTERNAL_PROJECT_PRESSURE)
+      {
+        cout << "Pressure projection" << endl;
+        exit(0);
+      }
+    
 #ifdef _MPI
      if(rank == out_rank)
 #endif
@@ -564,7 +618,7 @@ int main(int argc, char* argv[])
     for(j=1;j<=Max_It;j++)
      {      
       // Solve the NSE system
-      SystemMatrix->Solve(sol, rhs);
+      SystemMatrix->Solve_Pardiso(sol, rhs, j-1);
    
       //no nonlinear iteration for Stokes problem  
       if(TDatabase::ParamDB->FLOW_PROBLEM_TYPE==STOKES) 
@@ -701,7 +755,9 @@ int main(int argc, char* argv[])
     }
 #endif
   }
-
+  
+  // Write the solution to binary files
+  WriteSolution(sol, N_U, 3);  // where 3 is the solution number
   CloseFiles();
 #ifdef _MPI
   MPI_Finalize();

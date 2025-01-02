@@ -28,6 +28,9 @@
 #include <ParDirectSolver.h>
 #endif
 
+// Include Intel Pardiso Solver
+#include <IntelPardisoSolver.h>
+
 /**class for 3D  NSE system matrix */
 class TSystemNSE3D
 {
@@ -132,6 +135,9 @@ class TSystemNSE3D
     TNSE_MultiGrid *MG;
     TNSE_MGLevel *MGLevel;
     TItMethod *Itmethod, *prec;
+
+    // Create an instance of the Intel Pardiso Solver
+     IntelPardisoSolver *pardiso_solver = new IntelPardisoSolver();
  
     
   private:
@@ -163,6 +169,9 @@ class TSystemNSE3D
     
     /** solve the system matrix */
     void  Solve(double *sol, double *rhs);
+
+    /** solve the system matrix */
+    void  Solve_Pardiso(double *sol, double *rhs, int iter_num);
   
     /** measure the error in the NSE */
     void MeasureErrors(DoubleFunct3D *ExactU1, DoubleFunct3D *ExactU2, DoubleFunct3D *ExactU3, DoubleFunct3D *ExactP,

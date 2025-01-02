@@ -15,6 +15,10 @@
 #include "stdlib.h"
 #include <LinAlg.h>
 
+// THIVIN -- Including for Intel MKL blas
+#include <mkl.h>
+#include <omp.h>
+
 extern "C"
 {
   #include "umfpack.h"
@@ -156,6 +160,73 @@ void DirectSolver(TSquareMatrix *matrix, double *rhs, double *sol)
 
 //  OutPut("umfpack: " << ret << " " << t4-t1 << " sec." << endl);
 }
+
+
+/*******************************************************************/
+/*        SCALAR PROBLEMS  - Intel Pardiso With Flags              */
+/*******************************************************************/
+void PardisoDirectSolverWithObject(TSquareMatrix *matrix, double *rhs, double *sol,int iter_num, IntelPardisoSolver *pardiso_solver)
+{
+  double t1, t2, t3, t4;
+  int ret, i, j, k, l, begin, end;
+  double value;
+  int N_Eqn;
+  int *Row, *KCol;
+  double *Values;
+  void *Symbolic, *Numeric;
+
+  N_Eqn = matrix->GetN_Columns();
+  Row = matrix->GetRowPtr();
+  KCol = matrix->GetKCol();
+  Values = matrix->GetEntries();
+
+  // check ordering of the matrix
+  if (matrix->GetColOrder() != 1)
+  {
+    // sort matrix
+    OutPut("umfpack: reordering of the columns will be performed"<<endl);
+    OutPut("umfpack: no back ordering implemented !!!"<<endl);
+
+    for(i=0;i<N_Eqn;i++)
+    {
+      begin=Row[i];
+      end=Row[i+1];
+      for(j=begin;j<end;j++)
+      {
+        for(k=j+1;k<end;k++)
+        {
+          if(KCol[j] > KCol[k])
+          {
+            l = KCol[j];     value = Values[j];
+            KCol[j] = KCol[k]; Values[j] = Values[k];
+            KCol[k] = l;       Values[k] = value;
+          }                      // endif
+        }                        // endfor k
+      }                          // endfor j
+    }                            // endfor i
+  }
+  
+  if (iter_num == -1)
+  {
+    pardiso_solver->cleanup();
+    cout << "[INFO]: Pardiso cleanup" << endl;
+  }
+
+  if (iter_num == 0)
+  {
+    cout << "[INFO]: Pardiso init -> Calling Pardiso for first time " << endl;
+    pardiso_solver->initialize(N_Eqn, Row, KCol, Values);
+    cout << "[INFO]: Pardiso init -> Done" << endl;
+  }
+  else
+  {
+    pardiso_solver->solve(Values, Row, KCol, rhs, sol);
+  }
+
+
+//  OutPut("umfpack: " << ret << " " << t4-t1 << " sec." << endl);
+}
+
 
 /*******************************************************************/
 /*        SCALAR PROBLEMS                                          */
@@ -4970,5 +5041,692 @@ void DirectSolver(TSquareMatrix3D **sqmatrices, int n_row, int n_column,
     delete [] RowPtr;
   }  
 }
+
+
+void PardisoDirectSolver(TSquareMatrix3D *sqmatrixA11, TSquareMatrix3D *sqmatrixA12,
+						 TSquareMatrix3D *sqmatrixA13,
+						 TSquareMatrix3D *sqmatrixA21, TSquareMatrix3D *sqmatrixA22,
+						 TSquareMatrix3D *sqmatrixA23,
+						 TSquareMatrix3D *sqmatrixA31, TSquareMatrix3D *sqmatrixA32,
+						 TSquareMatrix3D *sqmatrixA33,
+						 TMatrix3D *matrixB1T, TMatrix3D *matrixB2T, TMatrix3D *matrixB3T,
+						 TMatrix3D *matrixB1, TMatrix3D *matrixB2, TMatrix3D *matrixB3,
+						 double *rhs, double *sol, int flag)
+{
+
+	if (TDatabase::ParamDB->SC_VERBOSE > 3)
+		OutPut("umf3d" << endl);
+	int *KColA, *RowPtrA;
+	int *KColB, *RowPtrB;
+	int *KColBT, *RowPtrBT;
+	double *EntriesA11, *EntriesA12, *EntriesA13, *EntriesA21;
+	double *EntriesA22, *EntriesA23, *EntriesA31, *EntriesA32, *EntriesA33;
+	double *EntriesB1, *EntriesB2, *EntriesB3, *EntriesB1T, *EntriesB2T, *EntriesB3T;
+	int N_, N_U, N_P, N_Entries;
+	// static double *Entries;
+	static double *Entries;
+	static int *KCol, *RowPtr;
+
+	double *null = (double *)NULL;
+	static void *Symbolic, *Numeric;
+	int i, j, k, l, begin, end, ret, pos;
+	double value;
+	int N_Active;
+	double t1, t2, t3, t4, t5;
+	int verbose = TDatabase::ParamDB->SC_VERBOSE;
+
+	if (flag == -1)
+	{
+
+		delete[] Entries;
+		delete[] KCol;
+		delete[] RowPtr;
+    
+    return;
+
+	}
+
+	t1 = GetTime();
+
+
+  N_U = sqmatrixA11->GetN_Rows();
+  N_P = matrixB1->GetN_Rows();
+  N_ = 3 * N_U + N_P;
+  N_Active = sqmatrixA11->GetActiveBound();
+
+  KColA = sqmatrixA11->GetKCol();
+  RowPtrA = sqmatrixA11->GetRowPtr();
+
+  KColB = matrixB1->GetKCol();
+  RowPtrB = matrixB1->GetRowPtr();
+
+  KColBT = matrixB1T->GetKCol();
+  RowPtrBT = matrixB1T->GetRowPtr();
+
+  EntriesA11 = sqmatrixA11->GetEntries();
+  EntriesA12 = sqmatrixA12->GetEntries();
+  EntriesA13 = sqmatrixA13->GetEntries();
+  EntriesA21 = sqmatrixA21->GetEntries();
+  EntriesA22 = sqmatrixA22->GetEntries();
+  EntriesA23 = sqmatrixA23->GetEntries();
+  EntriesA31 = sqmatrixA31->GetEntries();
+  EntriesA32 = sqmatrixA32->GetEntries();
+  EntriesA33 = sqmatrixA33->GetEntries();
+
+  EntriesB1 = matrixB1->GetEntries();
+  EntriesB2 = matrixB2->GetEntries();
+  EntriesB3 = matrixB3->GetEntries();
+  EntriesB1T = matrixB1T->GetEntries();
+  EntriesB2T = matrixB2T->GetEntries();
+  EntriesB3T = matrixB3T->GetEntries();
+
+  N_Entries = 9 * RowPtrA[N_U] + 3 * RowPtrB[N_P] + 3 * RowPtrBT[N_U];
+  Entries = new double[N_Entries];
+  KCol = new int[N_Entries];
+
+  RowPtr = new int[N_ + 1];
+  RowPtr[0] = 0;
+
+  pos = 0;
+
+  for (i = 0; i < N_U; i++)
+  {
+    begin = RowPtrA[i];
+    end = RowPtrA[i + 1];
+    for (j = begin; j < end; j++)
+    {
+      // A11
+      Entries[pos] = EntriesA11[j];
+      KCol[pos] = KColA[j];
+      pos++;
+      // A12
+      Entries[pos] = (i < N_Active) ? EntriesA12[j] : 0;
+      KCol[pos] = KColA[j] + N_U;
+      pos++;
+      // A13
+      Entries[pos] = (i < N_Active) ? EntriesA13[j] : 0;
+      KCol[pos] = KColA[j] + 2 * N_U;
+      pos++;
+    }
+
+    if (i < N_Active)
+    {
+      // B1T
+      begin = RowPtrBT[i];
+      end = RowPtrBT[i + 1];
+      for (j = begin; j < end; j++)
+      {
+        Entries[pos] = EntriesB1T[j];
+        KCol[pos] = KColBT[j] + 3 * N_U;
+        pos++;
+      }
+    }
+    RowPtr[i + 1] = pos;
+  }
+
+  for (i = 0; i < N_U; i++)
+  {
+    begin = RowPtrA[i];
+    end = RowPtrA[i + 1];
+    for (j = begin; j < end; j++)
+    {
+      // A21
+      Entries[pos] = (i < N_Active) ? EntriesA21[j] : 0;
+      KCol[pos] = KColA[j];
+      pos++;
+      // A22
+      Entries[pos] = EntriesA22[j];
+      KCol[pos] = KColA[j] + N_U;
+      pos++;
+      // A23
+      Entries[pos] = (i < N_Active) ? EntriesA23[j] : 0;
+      KCol[pos] = KColA[j] + 2 * N_U;
+      pos++;
+    }
+
+    if (i < N_Active)
+    {
+      // B2T
+      begin = RowPtrBT[i];
+      end = RowPtrBT[i + 1];
+      for (j = begin; j < end; j++)
+      {
+        Entries[pos] = EntriesB2T[j];
+        KCol[pos] = KColBT[j] + 3 * N_U;
+        pos++;
+      }
+    }
+    RowPtr[N_U + i + 1] = pos;
+  }
+
+  for (i = 0; i < N_U; i++)
+  {
+    begin = RowPtrA[i];
+    end = RowPtrA[i + 1];
+    for (j = begin; j < end; j++)
+    {
+      // A31
+      Entries[pos] = (i < N_Active) ? EntriesA31[j] : 0;
+      KCol[pos] = KColA[j];
+      pos++;
+      // A32
+      Entries[pos] = (i < N_Active) ? EntriesA32[j] : 0;
+      KCol[pos] = KColA[j] + N_U;
+      pos++;
+      // A33
+      Entries[pos] = EntriesA33[j];
+      KCol[pos] = KColA[j] + 2 * N_U;
+      pos++;
+    }
+
+    if (i < N_Active)
+    {
+      // B3T
+      begin = RowPtrBT[i];
+      end = RowPtrBT[i + 1];
+      for (j = begin; j < end; j++)
+      {
+        Entries[pos] = EntriesB3T[j];
+        KCol[pos] = KColBT[j] + 3 * N_U;
+        pos++;
+      }
+    }
+    RowPtr[2 * N_U + i + 1] = pos;
+  }
+
+  for (i = 0; i < N_P; i++)
+  {
+    begin = RowPtrB[i];
+    end = RowPtrB[i + 1];
+    for (j = begin; j < end; j++)
+    {
+      // B1
+      Entries[pos] = EntriesB1[j];
+      KCol[pos] = KColB[j];
+      pos++;
+    }
+    for (j = begin; j < end; j++)
+    {
+      // B2
+      Entries[pos] = EntriesB2[j];
+      KCol[pos] = KColB[j] + N_U;
+      pos++;
+    }
+    for (j = begin; j < end; j++)
+    {
+      // B3
+      Entries[pos] = EntriesB3[j];
+      KCol[pos] = KColB[j] + 2 * N_U;
+      pos++;
+    }
+    RowPtr[3 * N_U + i + 1] = pos;
+  }
+
+  if (TDatabase::ParamDB->INTERNAL_PROJECT_PRESSURE)
+  {
+    // pressure constant
+    begin = RowPtr[3 * N_U];
+    end = RowPtr[3 * N_U + 1];
+    for (j = begin + 1; j < end; j++)
+      Entries[j] = 0;
+    Entries[begin] = 1;
+    KCol[begin] = 3 * N_U;
+    rhs[3 * N_U] = 0;
+  }
+
+  cout << " Starting to sort the matrix" << endl;
+  // sort matrix
+  for (i = 0; i < N_; i++)
+  {
+    begin = RowPtr[i];
+    end = RowPtr[i + 1];
+
+    for (j = begin; j < end; j++)
+    {
+      for (k = j + 1; k < end; k++)
+      {
+        if (KCol[j] > KCol[k])
+        {
+          l = KCol[j];
+          value = Entries[j];
+          KCol[j] = KCol[k];
+          Entries[j] = Entries[k];
+          KCol[k] = l;
+          Entries[k] = value;
+        } // endif
+      }	  // endfor k
+    }		  // endfor j
+  }			  // endfor i
+
+  /*
+  for(i=0;i<N_;i++)
+  {
+    for(j=RowPtr[i];j<RowPtr[i+1];j++)
+    cout << i << " " << KCol[j] << " " << Entries[j] << endl;
+  }
+  */
+	solve_pardiso(N_, RowPtr, KCol, Entries, rhs, sol);
+
+	t2 = omp_get_wtime();
+	t4 = GetTime();
+	// cout << " SOLVING time : " << t2 - t1 << endl;
+		//  cout << " Solution norm main : "<< cblas_ddot(N_,sol,1.0,sol,1.0) <<endl;
+	/*
+	for(i=0;i<N_;i++)
+		cout << setw(6) << i << setw(30) << sol[i] << endl;
+	*/
+		delete[] Entries;
+		delete[] RowPtr;
+		delete[] KCol;
+}
+
+
+
+
+void PardisoDirectSolverWithObject(TSquareMatrix3D *sqmatrixA11, TSquareMatrix3D *sqmatrixA12,
+						 TSquareMatrix3D *sqmatrixA13,
+						 TSquareMatrix3D *sqmatrixA21, TSquareMatrix3D *sqmatrixA22,
+						 TSquareMatrix3D *sqmatrixA23,
+						 TSquareMatrix3D *sqmatrixA31, TSquareMatrix3D *sqmatrixA32,
+						 TSquareMatrix3D *sqmatrixA33,
+						 TMatrix3D *matrixB1T, TMatrix3D *matrixB2T, TMatrix3D *matrixB3T,
+						 TMatrix3D *matrixB1, TMatrix3D *matrixB2, TMatrix3D *matrixB3,
+						 double *rhs, double *sol, int iter_num, IntelPardisoSolver *pardiso_solver)
+{
+
+
+	if (TDatabase::ParamDB->SC_VERBOSE > 3)
+		OutPut("umf3d" << endl);
+	int *KColA, *RowPtrA;
+	int *KColB, *RowPtrB;
+	int *KColBT, *RowPtrBT;
+	double *EntriesA11, *EntriesA12, *EntriesA13, *EntriesA21;
+	double *EntriesA22, *EntriesA23, *EntriesA31, *EntriesA32, *EntriesA33;
+	double *EntriesB1, *EntriesB2, *EntriesB3, *EntriesB1T, *EntriesB2T, *EntriesB3T;
+	int N_, N_U, N_P, N_Entries;
+	// static double *Entries;
+	static double *Entries;
+	static int *KCol, *RowPtr;
+
+	double *null = (double *)NULL;
+	static void *Symbolic, *Numeric;
+	int i, j, k, l, begin, end, ret, pos;
+	double value;
+	int N_Active;
+	double t1, t2, t3, t4, t5;
+	int verbose = TDatabase::ParamDB->SC_VERBOSE;
+
+	if (iter_num == -1)
+	{
+
+		delete[] Entries;
+		delete[] KCol;
+		delete[] RowPtr;
+		
+    // When completely done
+    pardiso_solver->cleanup();
+    
+    return;
+
+
+	}
+
+	t1 = GetTime();
+
+
+  N_U = sqmatrixA11->GetN_Rows();
+  N_P = matrixB1->GetN_Rows();
+  N_ = 3 * N_U + N_P;
+  N_Active = sqmatrixA11->GetActiveBound();
+
+  KColA = sqmatrixA11->GetKCol();
+  RowPtrA = sqmatrixA11->GetRowPtr();
+
+  KColB = matrixB1->GetKCol();
+  RowPtrB = matrixB1->GetRowPtr();
+
+  KColBT = matrixB1T->GetKCol();
+  RowPtrBT = matrixB1T->GetRowPtr();
+
+  EntriesA11 = sqmatrixA11->GetEntries();
+  EntriesA12 = sqmatrixA12->GetEntries();
+  EntriesA13 = sqmatrixA13->GetEntries();
+  EntriesA21 = sqmatrixA21->GetEntries();
+  EntriesA22 = sqmatrixA22->GetEntries();
+  EntriesA23 = sqmatrixA23->GetEntries();
+  EntriesA31 = sqmatrixA31->GetEntries();
+  EntriesA32 = sqmatrixA32->GetEntries();
+  EntriesA33 = sqmatrixA33->GetEntries();
+
+  EntriesB1 = matrixB1->GetEntries();
+  EntriesB2 = matrixB2->GetEntries();
+  EntriesB3 = matrixB3->GetEntries();
+  EntriesB1T = matrixB1T->GetEntries();
+  EntriesB2T = matrixB2T->GetEntries();
+  EntriesB3T = matrixB3T->GetEntries();
+
+  N_Entries = 9 * RowPtrA[N_U] + 3 * RowPtrB[N_P] + 3 * RowPtrBT[N_U];
+  Entries = new double[N_Entries];
+  KCol = new int[N_Entries];
+
+  RowPtr = new int[N_ + 1];
+  RowPtr[0] = 0;
+
+  pos = 0;
+
+  for (i = 0; i < N_U; i++)
+  {
+    begin = RowPtrA[i];
+    end = RowPtrA[i + 1];
+    for (j = begin; j < end; j++)
+    {
+      // A11
+      Entries[pos] = EntriesA11[j];
+      KCol[pos] = KColA[j];
+      pos++;
+      // A12
+      Entries[pos] = (i < N_Active) ? EntriesA12[j] : 0;
+      KCol[pos] = KColA[j] + N_U;
+      pos++;
+      // A13
+      Entries[pos] = (i < N_Active) ? EntriesA13[j] : 0;
+      KCol[pos] = KColA[j] + 2 * N_U;
+      pos++;
+    }
+
+    if (i < N_Active)
+    {
+      // B1T
+      begin = RowPtrBT[i];
+      end = RowPtrBT[i + 1];
+      for (j = begin; j < end; j++)
+      {
+        Entries[pos] = EntriesB1T[j];
+        KCol[pos] = KColBT[j] + 3 * N_U;
+        pos++;
+      }
+    }
+    RowPtr[i + 1] = pos;
+  }
+
+  for (i = 0; i < N_U; i++)
+  {
+    begin = RowPtrA[i];
+    end = RowPtrA[i + 1];
+    for (j = begin; j < end; j++)
+    {
+      // A21
+      Entries[pos] = (i < N_Active) ? EntriesA21[j] : 0;
+      KCol[pos] = KColA[j];
+      pos++;
+      // A22
+      Entries[pos] = EntriesA22[j];
+      KCol[pos] = KColA[j] + N_U;
+      pos++;
+      // A23
+      Entries[pos] = (i < N_Active) ? EntriesA23[j] : 0;
+      KCol[pos] = KColA[j] + 2 * N_U;
+      pos++;
+    }
+
+    if (i < N_Active)
+    {
+      // B2T
+      begin = RowPtrBT[i];
+      end = RowPtrBT[i + 1];
+      for (j = begin; j < end; j++)
+      {
+        Entries[pos] = EntriesB2T[j];
+        KCol[pos] = KColBT[j] + 3 * N_U;
+        pos++;
+      }
+    }
+    RowPtr[N_U + i + 1] = pos;
+  }
+
+  for (i = 0; i < N_U; i++)
+  {
+    begin = RowPtrA[i];
+    end = RowPtrA[i + 1];
+    for (j = begin; j < end; j++)
+    {
+      // A31
+      Entries[pos] = (i < N_Active) ? EntriesA31[j] : 0;
+      KCol[pos] = KColA[j];
+      pos++;
+      // A32
+      Entries[pos] = (i < N_Active) ? EntriesA32[j] : 0;
+      KCol[pos] = KColA[j] + N_U;
+      pos++;
+      // A33
+      Entries[pos] = EntriesA33[j];
+      KCol[pos] = KColA[j] + 2 * N_U;
+      pos++;
+    }
+
+    if (i < N_Active)
+    {
+      // B3T
+      begin = RowPtrBT[i];
+      end = RowPtrBT[i + 1];
+      for (j = begin; j < end; j++)
+      {
+        Entries[pos] = EntriesB3T[j];
+        KCol[pos] = KColBT[j] + 3 * N_U;
+        pos++;
+      }
+    }
+    RowPtr[2 * N_U + i + 1] = pos;
+  }
+
+  for (i = 0; i < N_P; i++)
+  {
+    begin = RowPtrB[i];
+    end = RowPtrB[i + 1];
+    for (j = begin; j < end; j++)
+    {
+      // B1
+      Entries[pos] = EntriesB1[j];
+      KCol[pos] = KColB[j];
+      pos++;
+    }
+    for (j = begin; j < end; j++)
+    {
+      // B2
+      Entries[pos] = EntriesB2[j];
+      KCol[pos] = KColB[j] + N_U;
+      pos++;
+    }
+    for (j = begin; j < end; j++)
+    {
+      // B3
+      Entries[pos] = EntriesB3[j];
+      KCol[pos] = KColB[j] + 2 * N_U;
+      pos++;
+    }
+    RowPtr[3 * N_U + i + 1] = pos;
+  }
+
+  if (TDatabase::ParamDB->INTERNAL_PROJECT_PRESSURE)
+  {
+    // pressure constant
+    begin = RowPtr[3 * N_U];
+    end = RowPtr[3 * N_U + 1];
+    for (j = begin + 1; j < end; j++)
+      Entries[j] = 0;
+    Entries[begin] = 1;
+    KCol[begin] = 3 * N_U;
+    rhs[3 * N_U] = 0;
+  }
+
+  cout << " Starting to sort the matrix" << endl;
+  // sort matrix
+  for (i = 0; i < N_; i++)
+  {
+    begin = RowPtr[i];
+    end = RowPtr[i + 1];
+
+    for (j = begin; j < end; j++)
+    {
+      for (k = j + 1; k < end; k++)
+      {
+        if (KCol[j] > KCol[k])
+        {
+          l = KCol[j];
+          value = Entries[j];
+          KCol[j] = KCol[k];
+          Entries[j] = Entries[k];
+          KCol[k] = l;
+          Entries[k] = value;
+        } // endif
+      }	  // endfor k
+    }		  // endfor j
+  }			  // endfor i
+
+  /*
+  for(i=0;i<N_;i++)
+  {
+    for(j=RowPtr[i];j<RowPtr[i+1];j++)
+    cout << i << " " << KCol[j] << " " << Entries[j] << endl;
+  }
+  */
+
+ if (iter_num == 0)
+{
+  cout << " Calling pardiso solver for the first time" << endl;
+  pardiso_solver->initialize(N_, RowPtr, KCol, Entries);
+}
+
+else{
+  pardiso_solver->solve(Entries, RowPtr, KCol, rhs, sol);
+}
+ 
+	// solve_pardiso(N_, RowPtr, KCol, Entries, rhs, sol);
+
+	t2 = omp_get_wtime();
+	t4 = GetTime();
+	// cout << " SOLVING time : " << t2 - t1 << endl;
+		//  cout << " Solution norm main : "<< cblas_ddot(N_,sol,1.0,sol,1.0) <<endl;
+	/*
+	for(i=0;i<N_;i++)
+		cout << setw(6) << i << setw(30) << sol[i] << endl;
+	*/
+		delete[] Entries;
+		delete[] RowPtr;
+		delete[] KCol;
+}
+
+
+void solve_pardiso(int N_DOF, int *rowptr, int *colIndex, double *entries, double *rhs, double *sol)
+	{
+		MKL_INT mtype = 11; /* Real unsymmetric matrix */
+		/* RHS and solution vectors. */
+		MKL_INT nrhs = 1; /* Number of right hand sides. */
+		/* Internal solver memory pointer pt, */
+		/* 32-bit: int pt[64]; 64-bit: long int pt[64] */
+		/* or void *pt[64] should be OK on both architectures */
+		void *pt[64];
+		/* Pardiso control parameters. */
+		MKL_INT iparm[64];
+		MKL_INT maxfct, mnum, phase, error, msglvl;
+		/* Auxiliary variables. */
+		MKL_INT i, j;
+		double ddum;  /* Double dummy */
+		MKL_INT idum; /* Integer dummy. */
+					  /* -------------------------------------------------------------------- */
+					  /* .. Setup Pardiso control parameters. */
+					  /* -------------------------------------------------------------------- */
+		for (i = 0; i < 64; i++)
+		{
+			iparm[i] = 0;
+		}
+		iparm[0] = 1;	/* No solver default */ 
+		iparm[1] = 2;	/* Fill-in reordering from METIS */
+		iparm[3] = 0;	/* No iterative-direct algorithm */
+		iparm[4] = 0;	/* No user fill-in reducing permutation */
+		iparm[5] = 0;	/* Write solution into x */
+		iparm[6] = 0;	/* Not in use */
+		iparm[7] = 2;	/* Max numbers of iterative refinement steps */
+		iparm[8] = 0;	/* Not in use */
+		iparm[9] = 13;	/* Perturb the pivot elements with 1E-13 */
+		iparm[10] = 1;	/* Use nonsymmetric permutation and scaling MPS */
+		iparm[11] = 0;	/* Conjugate transposed/transpose solve */
+		iparm[12] = 1;	/* Maximum weighted matching algorithm is switched-on (default for non-symmetric) */
+		iparm[13] = 0;	/* Output: Number of perturbed pivots */
+		iparm[14] = 0;	/* Not in use */
+		iparm[15] = 0;	/* Not in use */
+		iparm[16] = 0;	/* Not in use */
+		iparm[17] = -1; /* Output: Number of nonzeros in the factor LU */
+		iparm[18] = -1; /* Output: Mflops for LU factorization */
+		iparm[19] = 0;	/* Output: Numbers of CG Iterations */
+		maxfct = 1;		/* Maximum number of numerical factorizations. */
+		mnum = 1;		/* Which factorization to use. */
+		msglvl = 0;		/* Print statistical information  */
+		error = 0;		/* Initialize error flag */
+		iparm[34] = 1;
+		/* -------------------------------------------------------------------- */
+		/* .. Initialize the internal solver memory pointer. This is only */
+		/* necessary for the FIRST call of the PARDISO solver. */
+		/* -------------------------------------------------------------------- */
+		for (i = 0; i < 64; i++)
+		{
+			pt[i] = 0;
+		}
+		/* -------------------------------------------------------------------- */
+		/* .. Reordering and Symbolic Factorization. This step also allocates */
+		/* all memory that is necessary for the factorization. */
+		/* -------------------------------------------------------------------- */
+		phase = 11;
+		PARDISO(pt, &maxfct, &mnum, &mtype, &phase,
+				&N_DOF, entries, rowptr, colIndex, &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
+		if (error != 0)
+		{
+			printf("\nERROR during symbolic factorization: %d", error);
+			exit(1);
+		}
+		// printf ("\nReordering completed ... ");
+		// printf ("\nNumber of nonzeros in factors = %d", iparm[17]);
+		// printf ("\nNumber of factorization MFLOPS = %d", iparm[18]);
+		/* -------------------------------------------------------------------- */
+		/* .. Numerical factorization. */
+		/* -------------------------------------------------------------------- */
+		phase = 22;
+		PARDISO(pt, &maxfct, &mnum, &mtype, &phase,
+				&N_DOF, entries, rowptr, colIndex, &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
+		if (error != 0)
+		{
+			printf("\nERROR during numerical factorization: %d", error);
+			exit(2);
+		}
+		// printf ("\nFactorization completed ... ");
+		/* -------------------------------------------------------------------- */
+		/* .. Back substitution and iterative refinement. */
+		/* -------------------------------------------------------------------- */
+		phase = 33;
+		PARDISO(pt, &maxfct, &mnum, &mtype, &phase,
+				&N_DOF, entries, rowptr, colIndex, &idum, &nrhs, iparm, &msglvl, rhs, sol, &error);
+		if (error != 0)
+		{
+			printf("\nERROR during solution: %d", error);
+			exit(3);
+		}
+
+		/* -------------------------------------------------------------------- */
+		/* .. Termination and release of memory. */
+		/* -------------------------------------------------------------------- */
+		phase = -1; /* Release internal memory. */
+		PARDISO(pt, &maxfct, &mnum, &mtype, &phase,
+				&N_DOF, &ddum, rowptr, colIndex, &idum, &nrhs,
+				iparm, &msglvl, &ddum, &ddum, &error);
+		// cout << "I am here" << endl;
+
+		// phase = 13;
+		// pardiso(pt, &maxfct, &mnum, &mtype, &phase,
+		//              &N_DOF, entries, rowptr, colIndex, &idum, &nrhs, iparm, &msglvl, rhs, sol, &error);
+
+		// if(error != 0){
+		//     std::cout << "Error in pardiso" << std::endl << std::endl;
+		// }
+	}
 
 #endif

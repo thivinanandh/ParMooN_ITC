@@ -73,6 +73,7 @@ void ExactP(double x, double y,  double z, double *values)
 // kind of boundary condition (for FE space needed)
 void BoundCondition(int CompID, double x, double y, double z, BoundCond &cond)
 {
+    TDatabase::ParamDB->INTERNAL_PROJECT_PRESSURE = 0;
  // (1000) Inlet - dirichlet, (1001) wall - dirichlet, (1002) Outlet - neumann
     if(CompID == 0)
     {
@@ -140,8 +141,8 @@ void LinCoeffs(int n_points, double *X, double *Y, double *Z,
       
     coeff[0] = eps;
     coeff[1] = 0;
-    coeff[2] = 0;
-    coeff[3] = 10.19367;  
+    coeff[2] = -10.19367;
+    coeff[3] = 0;  
     }
 }
 
