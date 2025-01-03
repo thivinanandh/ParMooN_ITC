@@ -25,8 +25,8 @@ void ExampleFile()
 // 1002 - Outlet
 
 // Inlet facing in yZ plane and velocity inlet is in x direction
-// The pipe starting at z = 0 and bending towards z = 10 ( positive z direction 
-// So the "g" value of gravity is 9.81 m/s^2 (positive z direction)
+// The pipe starting at z = 0 and bending towards -ve y direction 
+// So the "g" value of gravity is -9.81 m/s^2 
 
 // ========================================================================
 // exact solution

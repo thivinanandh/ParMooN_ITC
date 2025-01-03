@@ -616,13 +616,13 @@ int main(int argc, char* argv[])
     Max_It = TDatabase::ParamDB->SC_NONLIN_MAXIT_SADDLE;
 
     for(j=1;j<=Max_It;j++)
-     {      
+    {      
       // Solve the NSE system
       SystemMatrix->Solve_Pardiso(sol, rhs, j-1);
    
       //no nonlinear iteration for Stokes problem  
       if(TDatabase::ParamDB->FLOW_PROBLEM_TYPE==STOKES) 
-       break;
+        break;
 
       // assemble the system matrix with given aux, sol and rhs 
       SystemMatrix->AssembleNonLinear(Sol_array, Rhs_array);  
@@ -631,9 +631,9 @@ int main(int argc, char* argv[])
       memset(defect,0,N_TotalDOF*SizeOfDouble);
       SystemMatrix->GetResidual(sol, rhs, defect,impuls_residual,residual);
       
-    //correction due to L^2_O Pressure space 
-     if(TDatabase::ParamDB->INTERNAL_PROJECT_PRESSURE)
-       IntoL20Vector3D(defect+3*N_U, N_P, pressure_space_code);
+      //correction due to L^2_O Pressure space 
+      if(TDatabase::ParamDB->INTERNAL_PROJECT_PRESSURE)
+        IntoL20Vector3D(defect+3*N_U, N_P, pressure_space_code);
 
 #ifdef _MPI
      if(rank == out_rank)
