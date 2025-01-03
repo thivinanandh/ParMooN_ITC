@@ -7,6 +7,17 @@
 #include<TetraAffin.h>
 
 
+
+// For Bent Pipe cylinder
+
+// 1000 - Inlet 
+// 1001 - wall
+// 1002 - Outlet
+
+// Inlet facing in yZ plane and velocity inlet is in x direction
+// The pipe starting at z = 0 and bending towards -ve y direction 
+// So the "g" value of gravity is -9.81 m/s^2 
+
 void ExampleFile()
 {
   OutPut("Example: Siminhale_Final_values.h" << endl);  
@@ -219,7 +230,7 @@ void SurfBoundValue(int BdComp, double Param, double &value)
 
 void BoundCondition_Velocity(int BdComp,  double x, double y, double z,  BoundCond &cond)
 {
-  	if (BdComp == 0 || BdComp == 2)
+  	if (BdComp == 0 || BdComp == 1)
 		cond = DIRICHLET;
 
 	else

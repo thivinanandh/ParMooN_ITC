@@ -3518,11 +3518,26 @@ int TDomain::GmshGen(char *GeoFile)
   }
 //    cout <<"N_Vertices "<<N_Vertices<<endl;
    NewVertices = new TVertex*[N_Vertices];  
+
+      // THIVIN - Added mesh scalling based on the parameter values
+   // Scalling Parameters : 
+   double scale_x = TDatabase::ParamDB->MESH_SCALE_X;
+   double scale_y = TDatabase::ParamDB->MESH_SCALE_Y;
+   double scale_z = TDatabase::ParamDB->MESH_SCALE_Z; 
   
    for(i=0;i<N_Vertices; i++)
     {
      dat.getline (line, 99);
-     dat >> X >> Y >> Z;      
+     dat >> X >> Y >> Z;     
+
+     // check if any one of the scaling is not close to 1.0 by tolerance of 1e-8
+      if(fabs(scale_x-1.0)>1e-8 || fabs(scale_y-1.0)>1e-8 || fabs(scale_z-1.0)>1e-8)
+      {
+        X = X*scale_x;
+        Y = Y*scale_y;
+        Z = Z*scale_z;
+      } 
+     
      NewVertices[i] = new TVertex(X, Y, Z);
       if (X > Xmax) Xmax = X;
       if (X < Xmin) Xmin = X;
@@ -3538,6 +3553,13 @@ int TDomain::GmshGen(char *GeoFile)
     BoundX = Xmax - Xmin;
     BoundY = Ymax - Ymin;
     BoundZ = Zmax - Zmin;
+
+    cout <<std::setprecision(7) <<endl;
+    cout << " ------------------------------------ MESH DETAILS ---------------------------------------- "<<endl;
+    cout << " X - CO -ORDINATES ( Start , End , Length ):  " <<setw(12) << Xmin << setw(12) << Xmax <<setw(12) << BoundX <<setw(12)  << endl;
+    cout << " Y - CO -ORDINATES ( Start , End , Length ):  " <<setw(12) << Ymin << setw(12) << Ymax <<setw(12) << BoundY <<setw(12) << endl;
+    cout << " Z - CO -ORDINATES ( Start , End , Length ):  " <<setw(12) << Zmin << setw(12) << Zmax <<setw(12) << BoundZ <<setw(12) << endl;
+
 
    this->SetBoundBox(StartX, StartY, StartZ, BoundX, BoundY, BoundZ);
    
