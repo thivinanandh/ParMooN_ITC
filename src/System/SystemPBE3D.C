@@ -413,6 +413,8 @@ void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, doubl
     solution[m_n_velocity_points + index] = drift_velocity_y;
     solution[2 * m_n_velocity_points + index] = drift_velocity_z;
 
+    
+
     // Free the memory allocated for the FEFunction3D
     delete comp0;
     delete comp1;
