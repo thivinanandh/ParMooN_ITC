@@ -496,9 +496,9 @@ int main(int argc, char *argv[])
   // Read the Velocity Field values
   // ===========================================================================================================
   // setup a fevect function 3d
-  // Create a new fespace with order - 2, to store the NSE2D Values, the boundary condition here does not matter
+  // Create a new fespace with order - 2, to store the NSE2D Values, Give boundary condition based on what is used for Fluid simulations
   // Here FE Order 2 is used because, the velocities generally stored as second order solutions
-  TFESpace3D *fespace_b = new TFESpace3D(coll, "u_fluid", "u_fluid", BoundCondition, 2); 
+  TFESpace3D *fespace_b = new TFESpace3D(coll, "u_fluid", "u_fluid", BoundCondition_Velocity, 2); 
 
   int N_cells = coll->GetN_Cells();
 
@@ -560,7 +560,6 @@ int main(int argc, char *argv[])
   u1File.close();
   u2File.close();
   u3File.close();
-
 
   // Create a New TOutput3D Object to visualise the Fluid Field., which is read from the file
   char *VeloVTKBaseName = "Input_Velocity.vtk";
@@ -711,7 +710,6 @@ int main(int argc, char *argv[])
   {
     m++;
     TDatabase::TimeDB->INTERNAL_STARTTIME = TDatabase::TimeDB->CURRENTTIME;
-    cout << "Entering Time Loop: " << m << endl;
 
     for (l = 0; l < N_SubSteps; l++) // sub steps of fractional step theta
     {
@@ -771,6 +769,8 @@ int main(int argc, char *argv[])
         // cout << "Assembled System Matrix" << i << endl;
         // solve the system matrix
         SystemMatrix->Solve_Pardiso(sol, m-1);
+        // SystemMatrix->Solve(sol);
+
 
         // Get residual
         double residual = SystemMatrix->GetResidual(sol);
@@ -785,8 +785,6 @@ int main(int argc, char *argv[])
           // cout << " Called SystemMatrix->RestoreMassMat() " << endl;
           SystemMatrix->RestoreMassMat();
         }
-
-        
 
         // copy the solution to the solution_all array
         memcpy(solution_all + i * N_PhySpacePts, sol, N_PhySpacePts * SizeOfDouble);
@@ -812,9 +810,7 @@ int main(int argc, char *argv[])
     // Output the solution for all internal layers
     writeVtkFile(VtkBaseName, img, Output_Intl);
     writeVtkFile("Drift_Velocity", img, Output_DriftVelocity);
-    cout << "VTK File Written" << endl;
     img++;
-
     // if(m % TDatabase::TimeDB->STEPS_PER_IMAGE == 0)
   } // while(TDatabase::TimeDB->CURRENTTIME< end_time)
 
