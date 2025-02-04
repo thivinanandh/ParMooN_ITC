@@ -1,6 +1,4 @@
-# Ignore file name
-CMakeLists.txt
-UserConfig.cmake
+
 
 # Ignore Folders
 BUILD
