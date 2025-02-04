@@ -68,6 +68,10 @@ class TFEFunction3D
     double *GetValues()
     { return Values; }
 
+    /**Set Vector values */
+    void SetValues(double *values)
+    { Values = values; }
+
     /** calculate errors to given function 
      * NOTE: errors must be of length N_Errors+1 !!!! */
     void GetErrors(DoubleFunct3D *Exact, int N_Derivatives,

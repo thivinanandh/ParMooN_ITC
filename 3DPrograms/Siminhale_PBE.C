@@ -664,96 +664,9 @@ while(TDatabase::TimeDB->CURRENTTIME< end_time)
      System_Space->RestoreMassMat();
    } // for(i=0;i<N_DoF_Int
 
-  //  // Strang splitting L-update t^{n+1}
-  //  for(i=0;i<N_DoF_Intl;i++)
-  //  {
-  //    sol_tmp = Sol_SpatialSurface+(i*N_DOF);
-  //    System_Space->AssembleIntlMat(i, tau/2., PosX, fact, InternalScaling);       //solve internal system
-  //    Dsum(N_DOF, 1, fact, InternalScaling, sol_tmp, sol_tmp); /** z := alpha*x + beta*y */
-  //  }
-  } // for(l=0;l<N_SubSteps;l++) 
-// //======================================================================
-// // produce output
-// //======================================================================
-// #ifdef _SMPI
-//     if(profiling){
-//       total_vtk += (end_vtk-start_vtk);
-//       start_vtk = MPI_Wtime();
-//     }
-//   if(m==1 || m % TDatabase::TimeDB->STEPS_PER_IMAGE == 0)
-//     if(TDatabase::ParamDB->WRITE_VTK)
-//       Output->Write_ParVTK(MPI_COMM_WORLD, img, SubID);
-//         img++;
-
-//     if(profiling)	end_vtk = MPI_Wtime();
-// #else
-//     if(profiling){
-//       total_vtk += (end_vtk-start_vtk);
-//       start_vtk = GetTime();
-//     }
-   
-//    if(m==1 || m % TDatabase::TimeDB->STEPS_PER_IMAGE == 0)
-//     if(TDatabase::ParamDB->WRITE_VTK)
-//      {
-//       os.seekp(std::ios::beg);
-//        if(img<10) os <<  "VTK/"<<VtkBaseName<<".0000"<<img<<".vtk" << ends;
-//          else if(img<100) os <<  "VTK/"<<VtkBaseName<<".000"<<img<<".vtk" << ends;
-//           else if(img<1000) os <<  "VTK/"<<VtkBaseName<<".00"<<img<<".vtk" << ends;
-//            else if(img<10000) os <<  "VTK/"<<VtkBaseName<<".0"<<img<<".vtk" << ends;
-//             else  os <<  "VTK/"<<VtkBaseName<<"."<<img<<".vtk" << ends;
-//       Output->WriteVtk(os.str().c_str());
-//       img++;
-//      }   
-//     if(profiling)	end_vtk = GetTime();
-// #endif
-
-
-// cout<<"tau " << TDatabase::TimeDB->TIMESTEPLENGTH << " : " << tau << endl;
 //======================================================================
 // measure errors to known solution
 //======================================================================    
-   if(TDatabase::ParamDB->MEASURE_ERRORS)
-    {    
-
-    // for(i=0; i<N_DoF_Intl; ++i)
-    //  {
-    //   TDatabase::ParamDB->P11 = InternalPts[3*i];
-    //   TDatabase::ParamDB->P12 = InternalPts[3*i+1];
-    //   TDatabase::ParamDB->P13 = InternalPts[3*i+2];
-    //   Scalar_FeFunction->Interpolate(Exact);
-      
-    //   memcpy(Sol_SpatialSurface+(i*N_DOF), sol, N_DOF*SizeOfDouble); 
-    // } 
-
-     System_Space->GetErrors(Exact_RTE, Scalar_FeFunction, Sol_SpatialSurface, l2);
-
-  #ifdef _SMPI
-  if(TDatabase::ParamDB->Par_P0)
-  #endif
-    {
-     if(L2error_Max<l2)
-      {
-       L2error_Max=l2;
-       L2error_Max_t=TDatabase::TimeDB->CURRENTTIME;
-      } 
-
-     OutPut("Time: " << TDatabase::TimeDB->CURRENTTIME);
-     OutPut(" L2: " << l2);
-     OutPut(" L_Infty " << L2error_Max << endl);
- 
-      if(m>1)
-        {
-          l2L2_RTE += (l2*l2 + oldl2_RTE *oldl2_RTE)*0.5*TDatabase::TimeDB->TIMESTEPLENGTH;
-          
-          OutPut("L2 : " << l2 <<   " L2_Max: " << L2error_Max << " L2_Max_Time: " <<  L2error_Max_t <<" CurrentTime: ");
-          OutPut(TDatabase::TimeDB->CURRENTTIME <<  " l2(0,T;L2) " << sqrt(l2L2_RTE) << endl);
-         }
-
-      oldl2_RTE = l2;
-    }
- 
-   } //  if(TDatabase::ParamDB->MEASURE_ERRORS) 
-// exit(0);
 
  } // while(TDatabase::TimeDB->CURRENTTIME< end_time)
 

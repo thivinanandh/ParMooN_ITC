@@ -110,8 +110,7 @@ void mergesort(double *a, int low, int high, int * a2,int max)
 TSystemTNSE3D_ALE::TSystemTNSE3D_ALE(int N_levels, TFESpace3D **velocity_fespace, TFESpace3D **presssure_fespace, TFEVectFunct3D **velocity, 
                                     TFEFunction3D **pressure, double **sol, double **rhs,  int disctype, int nsetype, int solver,
                                    TFESpace3D **Projection_space, TFESpace3D ** gridFESpace, TFEVectFunct3D **meshVelocity, bool conservativeale)
-                                   :TSystemNSE3D(N_levels,velocity_fespace, presssure_fespace, velocity, pressure, sol, rhs, disctype,nsetype, solver)
-{
+ :TSystemNSE3D(N_levels,velocity_fespace, presssure_fespace, velocity, pressure, sol, rhs, disctype,nsetype, solver) {
  int i;  
   
   Projection_Spaces = Projection_space;

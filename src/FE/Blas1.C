@@ -30,6 +30,45 @@ double Ddot(int n, double *x, double *y)
   return r;
 }
 
+/** return L2 Norm */
+double L2Norm(int n, double *x)
+{
+    // Input validation
+    if (n <= 0 || x == NULL)
+    {
+        return -1.0;
+    }
+
+    // Calculate the inner product (x,x) using Ddot
+    double norm_squared = Ddot(n, x, x);
+
+    // Handle numerical stability for very small values
+    if (norm_squared < 0.0)
+    {
+        return 0.0;  // Return 0 for numerically unstable cases
+    }
+
+    // Return the square root of the inner product
+    return sqrt(norm_squared);
+}
+
+/** return L-infinity Norm */
+double LinfNorm(int n, double *x)
+{
+  // Loop over all elements and find the absolute maximum
+  double max = -INFINITY;
+  for (int i = 0; i < n; i++)
+  {
+    double abs_val = fabs(x[i]);
+    if (abs_val > max)
+    {
+      max = abs_val;
+    }
+  }
+
+  return max;
+}
+
 /** y := alpha*x + y */
 void Daxpy(int n, double alpha, double *x, double *y)
 {

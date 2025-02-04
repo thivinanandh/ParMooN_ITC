@@ -24,7 +24,7 @@ void ExampleFile()
 }
 
 // ========================================================================
-// definitions for the temperature
+// Boundary conditions for the popilation balance equation
 // ========================================================================
 
 void BoundCondition(int dummy,double x, double y, double z, BoundCond &cond)
@@ -40,50 +40,7 @@ void BoundValue(int dummy,double x, double y, double z, double &value)
 }
 
 
-void BilinearCoeffs_ND(int n_points, int N_Dim, double **Coords,
-                        double **param, double **coeffs)
-{
- double eps= 1.0/TDatabase::ParamDB->RE_NR;
-  int i;
-  double *coeff;                                  // *param;
-  double x, y, z, c, a[3], b[3], s[3], h;
-  double t = TDatabase::TimeDB->CURRENTTIME;
-  
-  b[0] = 0;
-  b[1] = 0;
-  b[2] = 0;  
-  c = 0;
-
-  for(i=0;i<n_points;i++)
-  {
-    coeff = coeffs[i];
-    // param = parameters[i]
-    // diffusion
-    coeff[0] = 1e-6;
-    // convection in x direction
-    coeff[1] = b[0];
-    // convection in y direction
-    coeff[2] = b[1];
-    // convection in z direction
-    coeff[3] = b[2];
-    // reaction
-    coeff[4] = c;
-     // rhs
-    coeff[5] = 0;
-    coeff[6] = 0;
-}
-}
-
-void GetKernel(int N_Inputs, double *Inn, double *Out) 
-{
-
- double c1 = 1./(4.*Pi);
- Out[0] =  c1;
-//  Out[0] = c1*(1.+ (Inn[0]*Inn[3] + Inn[1]*Inn[4] + Inn[2]*Inn[5]));
-
-}
-
-
+// Initial value of concentration at all points
 void InitialValue(int N_Inputs, double *Inn, double *Out) 
 {
   // Inputs X, Y, Z, l1
@@ -98,7 +55,7 @@ void InitialValue(int N_Inputs, double *Inn, double *Out)
   double distance_threshold = 0.5 * 0.5; // 0.95 times the radius of the unit circle
   
   // Check if the point (x, z) lies within the threshold distance and x <= 0.01
-  if (distance <= distance_threshold && x <= 0.01) {
+  if (distance <= distance_threshold && x <= 1e-04) {
     // Assign out[x] values based on l1 ranges
     const double epsilon = 1e-6;
 
@@ -119,26 +76,6 @@ void InitialValue(int N_Inputs, double *Inn, double *Out)
 }
 
 
-
-void GetRhs(int N_Inputs, double *Inn, double *Out) 
-{
-  double s1 = Inn[0];
-  double s2 = Inn[1];
-  double s3 = Inn[2];
-  double x= Inn[6];
-  double y= Inn[7];
-  double z= Inn[8];
-  double alpha = TDatabase::ParamDB->P0;  
-  double sigma_a = TDatabase::ParamDB->P1;
-  double sigma_s = TDatabase::ParamDB->P2;
-  double spx = sin(Pi*x);
-  double spy = sin(Pi*y);
-  double spz = sin(Pi*z);
-  double expt = exp(-alpha*TDatabase::TimeDB->CURRENTTIME);
-
- Out[0] = (sigma_a - sigma_s)*s1*s2*s3*expt*spx*spy*spz; //  
-
-}
 // ========================================================================
 // BilinearCoeffs for PBE in Physical Co-oridnates
 // ========================================================================
@@ -167,67 +104,11 @@ void BilinearCoeffs(int n_points, double *X, double *Y, double *Z,
   }
 }
 
-void SystemRhs(int N_Active, double *param, double *B, double *p1_null, double **RHSs, double **p2_null)
-{
- double s1, s2, s3, smult, tau;
-  
-  s1 = param[0];
-  s2 = param[1];  
-  s3 = param[2];
-  smult = s1*s2*s3;
-  tau = TDatabase::TimeDB->CURRENTTIMESTEPLENGTH; 
-
-  Daxpy(N_Active, smult*tau*TDatabase::TimeDB->THETA4,  RHSs[0], B);    
-  Daxpy(N_Active, s1*smult*tau*TDatabase::TimeDB->THETA4, RHSs[1], B);   
-  Daxpy(N_Active, s2*smult*tau*TDatabase::TimeDB->THETA4,  RHSs[2], B);   
-  Daxpy(N_Active, s3*smult*tau*TDatabase::TimeDB->THETA4,  RHSs[3], B);  
-
-  //supg 
-   if (TDatabase::ParamDB->DISCTYPE==SUPG)
-    {
-     Daxpy(N_Active, s1*smult*tau,  RHSs[4], B);   
-     Daxpy(N_Active, s2*smult*tau,  RHSs[5], B);   
-     Daxpy(N_Active, s3*smult*tau,  RHSs[6], B);  
-
-     Daxpy(N_Active, s1*s1*smult*tau,  RHSs[7], B);   
-     Daxpy(N_Active, s2*s2*smult*tau,  RHSs[8], B);   
-     Daxpy(N_Active, s3*s3*smult*tau,  RHSs[9], B);  
-
-     Daxpy(N_Active, s1*s2*smult*tau,  RHSs[10], B);   
-     Daxpy(N_Active, s1*s3*smult*tau,  RHSs[11], B);   
-     Daxpy(N_Active, s2*s3*smult*tau,  RHSs[12], B);  
-    }
-
-}
-
-
-// kind of boundary condition (for FE space needed)
-void SurfBoundCondition(int BdComp, double t, BoundCond &cond)
-{
-//   cond = DIRICHLET;
-//  each edge of all triangles on a 3D surface is an interior edge
-  cout << "Error!! each edge of all triangles on a 3D surface is an interior edge"<<endl;
-  cout << "Error!! Check the Example file "<<endl;
-  exit(0);
-
-}
-
-// value of boundary condition
-void SurfBoundValue(int BdComp, double Param, double &value)
-{
-//   value = 0;
-//  each edge of all triangles on a 3D surface is an interior edge
-  cout << "Error!! each edge of all surface triangles on a 3D surface is an interior edge"<<endl;
-  cout << "Error!! Check the Example file "<<endl;
-  exit(0);
-}
-
-
-
-
+// ========================================================================
+// These boundary conditions are used to read and set the fluid velocity
+// ========================================================================
 
 //// ------------- SIMINHALE THIVIN -----------------////
-
 void BoundCondition_Velocity(int BdComp,  double x, double y, double z,  BoundCond &cond)
 {
   	if (BdComp == 0 || BdComp == 1)
@@ -238,6 +119,50 @@ void BoundCondition_Velocity(int BdComp,  double x, double y, double z,  BoundCo
 		cond = NEUMANN;
 	}
 }
+
+
+void BoundCondition_DriftVelocity(int BdComp,  double x, double y, double z,  BoundCond &cond)
+{
+// Make only wall dirichlet, this is done because, we need to ensure that drift velocitites at wall are suppposed to be zero
+// So having this as dirichlet will arrange these dirichlet nodes at the end, which enables easy memset ooperation to set the drift velocity to zero
+
+  	if ( BdComp == 1)
+		cond = DIRICHLET;
+
+	else
+	{
+		cond = NEUMANN;
+	}
+}
+
+
+// ========================================================================
+// These boundary conditions are used to set Eulerian Particle Velocity
+// ========================================================================
+
+//// ------------- SIMINHALE THIVIN -----------------////
+void BoundCondition_Particle_Velocity(int BdComp,  double x, double y, double z,  BoundCond &cond)
+{
+  	cond = DIRICHLET; 
+}
+
+// value of boundary condition
+void BoundValue_Particle_Velocity(int dummy,double x, double y, double z, double &value)
+{
+  value = 0.0; // Zero Dirichlet Everywhere
+}
+
+
+void Exact_DriftBoundaryValues(double x, double y,  double z, double *values)
+{
+  values[0] = 10.0;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+  values[4] = 0;
+}
+
+
 
 // Boundary Condition for the internal System 
 void BoundCondition_LminLMax_L0(BoundCond &cond_Lmin, BoundCond &cond_Lmax)

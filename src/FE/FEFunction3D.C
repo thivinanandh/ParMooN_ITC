@@ -1313,6 +1313,7 @@ void TFEFunction3D::FindGradientLocal(TBaseCell *cell, int cell_no,
   uy = 0;
   uz = 0;
   Numbers = GlobalNumbers + BeginIndex[cell_no];
+
   for(j=0;j<N_BaseFunct;j++)
   {
     val = Values[Numbers[j]];

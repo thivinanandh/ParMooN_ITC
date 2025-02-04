@@ -1295,7 +1295,7 @@ void TSystemNSE3D::Solve_Pardiso(double *sol, double *rhs, int iter_num)
   default:
     OutPut("Unknown Solver" << endl);
     exit(4711);
-    ;
+    
   }
 }
 

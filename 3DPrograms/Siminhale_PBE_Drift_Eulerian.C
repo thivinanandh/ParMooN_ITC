@@ -602,6 +602,11 @@ int main(int argc, char *argv[])
     fevect_drift_array[i]->GetComponent(1)->Interpolate(Exact_DriftBoundaryValues);
     fevect_drift_array[i]->GetComponent(2)->Interpolate(Exact_DriftBoundaryValues);
 
+    // Interpolate the Particle Velocity
+    fevect_particle_array[i]->GetComponent(0)->Interpolate(Exact_DriftBoundaryValues);
+    fevect_particle_array[i]->GetComponent(1)->Interpolate(Exact_DriftBoundaryValues);
+    fevect_particle_array[i]->GetComponent(2)->Interpolate(Exact_DriftBoundaryValues);
+
   }
 
   // Create an output object to visualise the drift velocity
@@ -694,6 +699,20 @@ int main(int argc, char *argv[])
 
   SystemMatrix->Init_for_drift_velocity(fevect_drift_array, g, fluid_rho, particle_rho_values, fluid_viscosity,
                                         N_InternalPts, diameter_values, fevect_b, n_size_u);
+
+  // ==========================================================================================================
+  // Set up System Matrix for Solving the Particle Velocity
+  // ===========================================================================================================
+  
+  // Setup the System Matrix for the Particle Velocity for each internal point
+  TSystemPBE3D** particle_velocity_system_matrices = new TSystemPBE3D*[N_InternalPts];
+  for (int i = 0; i < N_InternalPts; i++)
+  {
+    particle_velocity_system_matrices[i] = new TSystemPBE3D(mg_level, Scalar_FeSpaces, Sol_array, Rhs_array,
+                                                TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
+    particle_velocity_system_matrices[i]->Init_for_Particle_Velocity(BilinearCoeffs, BoundCondition_Particle_Velocity, BoundValue_Particle_Velocity, aux, i);
+  }
+
 
   // Initialise the Drift velocity values to be zero
   // The values are created as 2*n_size_u, with zero as value.

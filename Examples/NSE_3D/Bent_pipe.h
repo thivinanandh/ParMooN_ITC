@@ -141,7 +141,7 @@ void LinCoeffs(int n_points, double *X, double *Y, double *Z,
       
     coeff[0] = eps;
     coeff[1] = 0;
-    coeff[2] = -10.19367;
+    coeff[2] = 0;
     coeff[3] = 0;  
     }
 }

@@ -147,6 +147,13 @@ void MatrixARhsAssembleNSEValues(double Mult, double *coeff, double *param,
                             double ***LocMatrices, double **LocRhs);
 
 
+// Add Matrix with assembly routine
+void MatrixARhsAssembleEulerianParticle(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs);
+
+
 
 
 void MatrixAUpwindRhsAssemble(double Mult, double *coeff, double *param,

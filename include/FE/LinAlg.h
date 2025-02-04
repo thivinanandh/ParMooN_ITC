@@ -31,6 +31,12 @@
 /** return inner product (x,y) */
 double Ddot(int n, double *x, double *y);
 
+/** return L2 Norm */
+double L2Norm(int n, double *x);
+
+/** return L-infinity Norm */
+double LinfNorm(int n, double *x);
+
  #ifdef _MPI
 /** return inner product (x,y) */
 // double ParDdot(double *x, double *y, TParFECommunicator2D *ParCommunicator);

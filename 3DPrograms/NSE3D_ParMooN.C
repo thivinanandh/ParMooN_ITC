@@ -57,9 +57,9 @@ void WriteSolution(double* sol, int N_U, int sol_num)
 {
     // Create filenames with padding
     int padding = 6 - std::to_string(sol_num).length();
-    std::string u1FileName = "Solution_u_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
-    std::string u2FileName = "Solution_v_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
-    std::string w3FileName = "Solution_w_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+    std::string u1FileName = "Solution_u_without_g_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+    std::string u2FileName = "Solution_v_without_g_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
+    std::string w3FileName = "Solution_w_without_g_" + std::string(padding, '0') + std::to_string(sol_num) + ".bin";
 
     // Open files for binary writing
     std::ofstream u1File(u1FileName, std::ios::out | std::ios::binary);
@@ -669,7 +669,7 @@ int main(int argc, char* argv[])
 //======================================================================
 // produce outout
 //======================================================================       
-//    u1->Interpolate(ExactU1);
+  //  u1->Interpolate(ExactU1);
 //    u2->Interpolate(ExactU2);
 //    u3->Interpolate(ExactU3);
 //    p->Interpolate(ExactP);

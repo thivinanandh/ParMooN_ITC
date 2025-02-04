@@ -1,15 +1,15 @@
 /** ************************************************************************ 
 *
-* @class     TSystemPBE3D
-* @brief     stores the information of a timedependent part of a 3D Population Balance
+* @class     TSystemDriftVelocity3D
+* @brief     Drift velocity solver for Eulerian Population balance equations
 * @author    Thivin Anandh
-* @date      08-oct-2024
+* @date      21-jan-2025
 * @History 
  ************************************************************************  */
 
 
-#ifndef __SYSTEMPBE3D__
-#define __SYSTEMPBE3D__
+#ifndef __SYSTEMDRIFTVELOCITY3D__
+#define __SYSTEMDRIFTVELOCITY3D__
 
 #include <SquareMatrix3D.h>
 #include <SystemCD3D.h>
@@ -18,7 +18,7 @@
 #include <IntelPardisoSolver.h>
 
 /**class for 3D scalar system matrix */
-class TSystemPBE3D : public TSystemCD3D
+class TSystemDriftVelocity3D : public TSystemCD3D
 {
   protected:
 #ifdef _MPI
@@ -60,37 +60,14 @@ class TSystemPBE3D : public TSystemCD3D
     
   public:
     /** constructor */
-     TSystemPBE3D(int N_levels, TFESpace3D **fespaces, double **sol, double **rhs, int disctype, int solver);
+     TSystemDriftVelocity3D(int N_levels, TFESpace3D **fespaces, double **sol, double **rhs, int disctype, int solver);
 
     /** destrcutor */
-    ~TSystemPBE3D();
+    ~TSystemDriftVelocity3D();
 
     /** methods */
     void Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue, TAuxParam3D *aux);
 
-    /** Function, which calls the Assembly function with the NSE3D Values */
-    void Init_with_NSEValues(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue, TAuxParam3D *aux);
-
-    /** Funtion to call the Eulerian particle velocity solver */
-    void Init_for_Particle_Velocity(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue,
-                              TAuxParam3D *aux );
-
-    /** Function, initialises the parameters for Drift velocity */
-    void Init_for_drift_velocity(TFEVectFunct3D** fevect_drift_array, double* g, double fluid_rho, double* particle_rho, double fluid_viscosity,
-          int N_internal, double* diameter_values, TFEVectFunct3D* fevect_b, int n_velocity_points);
-    
-    /** Solve for Drift Velocity */
-    void SolveDriftVelocity(double timestep, int i, double *sol);
-
-    /** Solve for Drift Velocity */
-    void SolveDriftVelocity(double timestep, int i, double *drift_velocity, double *particle_velocity, double *fluid_velocity);
-
-    /** Solve for Drift Velocity */
-    void SolveDriftVelocity(double timestep, int internal_level, 
-    TFEVectFunct3D* fluid_fevect,  // Fluid velocity FE vector function
-    TFEVectFunct3D* particle_fevect,  // Drift velocity FE vector function
-    double* particle_velocity, double* fluid_velocity);
-    
     // Values
     TFEVectFunct3D **m_fevect_drift_array; // Stores the drift velocity array
     TFEVectFunct3D **m_fevect_u_l; // Stores the particle velocity array

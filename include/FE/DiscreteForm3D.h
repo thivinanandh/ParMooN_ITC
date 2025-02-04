@@ -231,6 +231,9 @@ void InitializeDiscreteFormsScalar(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, 
 void InitializeDiscreteFormsScalarNSE(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin, 
                                    TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff);
 
+void InitializeDiscreteFormsEulerianDriftParticle(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin, 
+                                   TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff);
+
 void InitializeDiscreteFormGrid(TDiscreteForm3D *&DiscreteFormGrid, CoeffFct3D *GridCoeffs);
 
 void InitializeDiscreteFormRTE(TDiscreteForm3D *&DiscreteFormMBRhs_Galerkin, TDiscreteForm3D *&DiscreteFormRhs_Galerkin, 
