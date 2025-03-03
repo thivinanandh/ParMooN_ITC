@@ -459,15 +459,19 @@ void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, doubl
   }
 }
 
-void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, double *drift_velocity, double *particle_velocity, double *fluid_velocity)
+void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, TFEVectFunct3D *drift_fevect, TFEVectFunct3D *particle_fevect, TFEVectFunct3D *fluid_fevect, int RK_Method)
 {
   // Assume the incoming velocity is u_l ( which goes into PBE assembly)
   // We need to Solve for v(drift): which is u (fluid) + u_l (particle)
   // After solving for v(drift), we need to update the particle velocity u_l = v(drift) - u(fluid)
   // The equation to solve is d(v)/dt = -(v.grad)v - (1/\tau)(v - u) + (1 - mu)g
-
   // Obtain the drift velocity for the internal level
-  TFEVectFunct3D *drift_velocity_fevect = m_fevect_drift_array[internal_level];
+  TFEVectFunct3D *drift_velocity_fevect = drift_fevect;
+  // obtain particle velocity array
+  double* particle_velocity = particle_fevect->GetValues();
+  double* fluid_velocity    = fluid_fevect->GetValues();
+  double* drift_velocity    = drift_velocity_fevect->GetValues();
+
 
   // Store the Components of the drift velocity and the gradients
   TFEFunction3D *comp0 = drift_velocity_fevect->GetComponent(0);
@@ -488,31 +492,25 @@ void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, doubl
     int cell_id = (int)m_physical_coordinates[3 * m_n_velocity_points + index];
     TBaseCell *cell = m_fevect_drift->GetFESpace3D()->GetCollection()->GetCell(cell_id);
 
-    // cout << "-------------------------------------------- " << endl;
-
     // declare variable to store temp gradient
-    // Obtain the u_l values
     double values[4];
     comp0->FindGradientLocal(cell, cell_id, x_coord, y_coord, z_coord, values);
     double vel_value_x = values[0];
     double vel_x_gradient_x = values[1];
     double vel_x_gradient_y = values[2];
     double vel_x_gradient_z = values[3];
-    // cout << "vel_value_x: " << vel_value_x << " vel_x_gradient_x: " << vel_x_gradient_x << " vel_x_gradient_y: " << vel_x_gradient_y << " vel_x_gradient_z: " << vel_x_gradient_z << endl;
 
     comp1->FindGradientLocal(cell, cell_id, x_coord, y_coord, z_coord, values);
     double vel_value_y = values[0];
     double vel_y_gradient_x = values[1];
     double vel_y_gradient_y = values[2];
     double vel_y_gradient_z = values[3];
-    // cout << "vel_value_y: " << vel_value_y << " vel_y_gradient_x: " << vel_y_gradient_x << " vel_y_gradient_y: " << vel_y_gradient_y << " vel_y_gradient_z: " << vel_y_gradient_z << endl;
 
     comp2->FindGradientLocal(cell, cell_id, x_coord, y_coord, z_coord, values);
     double vel_value_z = values[0];
     double vel_z_gradient_x = values[1];
     double vel_z_gradient_y = values[2];
     double vel_z_gradient_z = values[3];
-    // cout << "vel_value_z: " << vel_value_z << " vel_z_gradient_x: " << vel_z_gradient_x << " vel_z_gradient_y: " << vel_z_gradient_y << " vel_z_gradient_z: " << vel_z_gradient_z << endl;
 
     // Get the values
     double fluid_velocity_x = fluid_velocity[index];
@@ -523,38 +521,50 @@ void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, doubl
     double drift_velocity_y = drift_velocity[m_n_velocity_points + index];
     double drift_velocity_z = drift_velocity[2 * m_n_velocity_points + index];
 
-    m_fluid_rho = 1000;
+    m_fluid_rho = 1000; // Here fluid refers to the fluid particles dispersed in the air // THIVIN-HARDCODED
     double diameter = m_diameter_values[internal_level] * 1e-4; // Convert to meters
     double tau = (m_fluid_rho * diameter * diameter) / (18 * m_fluid_viscosity);
-    // cout <<"m_fluid_rho: " << m_fluid_rho << " Diameter: " << diameter << " m_fluid_viscosity: " << m_fluid_viscosity << " tau: " << tau << endl;
 
-    double gamma = 0.001;
+    // Stage 1
+    double k1_x = -1.0 * (drift_velocity_x * vel_x_gradient_x + drift_velocity_y * vel_y_gradient_x + drift_velocity_z * vel_z_gradient_x);
+    k1_x += -1.0 * (1.0 / tau) * (drift_velocity_x - fluid_velocity_x) + (1.0 - gamma) * m_g_array[0];
 
-    // Calculate the drift velocity in x-direction
-    double v_x = -1.0 * (vel_value_x * vel_x_gradient_x + vel_value_y * vel_y_gradient_x + vel_value_z * vel_z_gradient_x);
-    // cout << "v_x: " << v_x << " vel_value_x: " << vel_value_x << " vel_x_gradient_x: " << vel_x_gradient_x << " vel_value_y: " << vel_value_y << " vel_y_gradient_x: " << vel_y_gradient_x << " vel_value_z: " << vel_value_z << " vel_z_gradient_x: " << vel_z_gradient_x << endl;
-    v_x += -1.0 * (1.0 / tau) * (drift_velocity_x - fluid_velocity_x) + (1.0 - gamma) * m_g_array[0];
-    // cout << "old Drift Velocity x: " << drift_velocity_x << " v_x: " << v_x << " timestep: " << timestep << " drift_velocity_x: " << drift_velocity_x << endl;
-    drift_velocity_x_new[index] = (v_x * timestep) + drift_velocity_x;
-    // cout << "Final Drift Velocity x: " << drift_velocity_x_new[index] << endl;
+    double k1_y = -1.0 * (drift_velocity_x * vel_x_gradient_y + drift_velocity_y * vel_y_gradient_y + drift_velocity_z * vel_z_gradient_y);
+    k1_y += -1.0 * (1.0 / tau) * (drift_velocity_y - fluid_velocity_y) + (1.0 - gamma) * m_g_array[1];
 
-    // Calculate the drift velocity in y-direction
-    double v_y = -1.0 * (vel_value_x * vel_x_gradient_y + vel_value_y * vel_y_gradient_y + vel_value_z * vel_z_gradient_y);
-    // cout <<"v_y: " << v_y << " vel_value_x: " << vel_value_x << " vel_x_gradient_y: " << vel_x_gradient_y << " vel_value_y: " << vel_value_y << " vel_y_gradient_y: " << vel_y_gradient_y << " vel_value_z: " << vel_value_z << " vel_z_gradient_y: " << vel_z_gradient_y << endl;
-    v_y += -1.0 * (1.0 / tau) * (drift_velocity_y - fluid_velocity_y) + (1.0 - gamma) * m_g_array[1];
-    // cout << "Drift Velocity y: " << drift_velocity_y << " v_y: " << v_y << " timestep: " << timestep << " drift_velocity_y: " << drift_velocity_y << endl;
-    drift_velocity_y_new[index] = (v_y * timestep) + drift_velocity_y;
-    // cout << "Drift Velocity y new: " << drift_velocity_y_new[index] << endl;
+    double k1_z = -1.0 * (drift_velocity_x * vel_x_gradient_z + drift_velocity_y * vel_y_gradient_z + drift_velocity_z * vel_z_gradient_z);
+    k1_z += -1.0 * (1.0 / tau) * (drift_velocity_z - fluid_velocity_z) + (1.0 - gamma) * m_g_array[2];
 
-    // Calculate the drift velocity in z-direction
-    double v_z = -1.0 * (vel_value_x * vel_x_gradient_z + vel_value_y * vel_y_gradient_z + vel_value_z * vel_z_gradient_z);
-    // cout <<"v_z: " << v_z << " vel_value_x: " << vel_value_x << " vel_x_gradient_z: " << vel_x_gradient_z << " vel_value_y: " << vel_value_y << " vel_y_gradient_z: " << vel_y_gradient_z << " vel_value_z: " << vel_value_z << " vel_z_gradient_z: " << vel_z_gradient_z << endl;
-    v_z += -1.0 * (1.0 / tau) * (drift_velocity_z - fluid_velocity_z) + (1.0 - gamma) * m_g_array[2];
-    // cout << "Drift Velocity z: " << drift_velocity_z << " v_z: " << v_z << " timestep: " << timestep << " drift_velocity_z: " << drift_velocity_z << endl;
-    // drift_velocity_z_new[index] = (v_z * timestep) + drift_velocity_z;
-    // cout << "Drift Velocity z new: " << drift_velocity_z_new[index] << endl;
+    if (RK_Method == 1)
+    {
+        // Update drift velocities
+        drift_velocity_x_new[index] = drift_velocity_x + timestep * k1_x;
+        drift_velocity_y_new[index] = drift_velocity_y + timestep * k1_y;
+        drift_velocity_z_new[index] = drift_velocity_z + timestep * k1_z;
 
-    // cout << "Drift Velocity x: " << drift_velocity_x_new[index] << " Drift Velocity y: " << drift_velocity_y_new[index] << " Drift Velocity z: " << drift_velocity_z_new[index] << endl;
+      // break out of the loop
+      continue;
+    }
+    // Intermediate values for drift velocity components v_x, v_y, v_z
+    double drift_velocity_x_mid = drift_velocity_x + 0.5 * timestep * k1_x;
+    double drift_velocity_y_mid = drift_velocity_y + 0.5 * timestep * k1_y;
+    double drift_velocity_z_mid = drift_velocity_z + 0.5 * timestep * k1_z;
+
+    // Stage 2
+    // Substitute all the v_x, v_y, v_z values with the intermediate values
+    double k2_x = -1.0 * (drift_velocity_x_mid * vel_x_gradient_x + drift_velocity_y_mid * vel_y_gradient_x + drift_velocity_z_mid * vel_z_gradient_x);
+    k2_x += -1.0 * (1.0 / tau) * (drift_velocity_x_mid - fluid_velocity_x) + (1.0 - gamma) * m_g_array[0];
+
+    double k2_y = -1.0 * (drift_velocity_x_mid * vel_x_gradient_y + drift_velocity_y_mid * vel_y_gradient_y + drift_velocity_z_mid * vel_z_gradient_y);
+    k2_y += -1.0 * (1.0 / tau) * (drift_velocity_y_mid - fluid_velocity_y) + (1.0 - gamma) * m_g_array[1];
+
+    double k2_z = -1.0 * (drift_velocity_x_mid * vel_x_gradient_z + drift_velocity_y_mid * vel_y_gradient_z + drift_velocity_z_mid * vel_z_gradient_z);
+    k2_z += -1.0 * (1.0 / tau) * (drift_velocity_z_mid - fluid_velocity_z) + (1.0 - gamma) * m_g_array[2];
+
+    // Update drift velocities
+    drift_velocity_x_new[index] = drift_velocity_x + timestep * k2_x;
+    drift_velocity_y_new[index] = drift_velocity_y + timestep * k2_y;
+    drift_velocity_z_new[index] = drift_velocity_z + timestep * k2_z;
   }
 
   // Obtain the FESpace for the drift velocity
@@ -573,33 +583,34 @@ void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level, doubl
   memcpy(drift_velocity + m_n_velocity_points, drift_velocity_y_new, m_n_velocity_points * SizeOfDouble);
   memcpy(drift_velocity + 2 * m_n_velocity_points, drift_velocity_z_new, m_n_velocity_points * SizeOfDouble);
 
-  // Now each array has 3 * of N_DOF values, each section for each component of velocity.
-  // In one section of N_DOF, there will be N_Active + ( N_DOF - N_Active) values, where the last N_DOF - N_Active values are Dirichlet values.
-  // We will set these values as zeros for each component of the drift velocity.
-  memset(drift_velocity + N_Active, 0, N_DirichletDof * SizeOfDouble);
-  memset(drift_velocity + 1 * N_DOF + N_Active, 0, N_DirichletDof * SizeOfDouble);
-  memset(drift_velocity + 2 * N_DOF + N_Active, 0, N_DirichletDof * SizeOfDouble);
-
-  // Also set the particle velocity also to be zero on the boundaries, so what when we add them ,t he boundary values becomes zero
-  memset(particle_velocity + N_Active, 0, N_DirichletDof * SizeOfDouble);
-  memset(particle_velocity + 1 * N_DOF + N_Active, 0, N_DirichletDof * SizeOfDouble);
-  memset(particle_velocity + 2 * N_DOF + N_Active, 0, N_DirichletDof * SizeOfDouble);
 
   // Compute the L2 norm of the difference between the old and new drift velocity
   double l2_norm_drift_velocity_x = L2Norm(m_n_velocity_points, drift_velocity);
   double l2_norm_drift_velocity_y = L2Norm(m_n_velocity_points, drift_velocity + m_n_velocity_points);
   double l2_norm_drift_velocity_z = L2Norm(m_n_velocity_points, drift_velocity + 2 * m_n_velocity_points);
 
-  cout << "L2 Norm of Drift Velocity x: " << l2_norm_drift_velocity_x << " Drift Velocity y: " << l2_norm_drift_velocity_y << " Drift Velocity z: " << l2_norm_drift_velocity_z << endl;
+  // cout << "L2 Norm of Drift Velocity x: " << l2_norm_drift_velocity_x << " Drift Velocity y: " << l2_norm_drift_velocity_y << " Drift Velocity z: " << l2_norm_drift_velocity_z << endl;
 
   // Particle Velocity (u_l) -> Drift Velocity (v) - Fluid Velocity (u)
   // Update the particle velocity
   for (int i = 0; i < m_n_velocity_points; i++)
   {
-    particle_velocity[i] = drift_velocity_x_new[i] - fluid_velocity[i];
-    particle_velocity[m_n_velocity_points + i] = drift_velocity_y_new[i] - fluid_velocity[m_n_velocity_points + i];
-    particle_velocity[2 * m_n_velocity_points + i] = drift_velocity_z_new[i] - fluid_velocity[2 * m_n_velocity_points + i];
+    particle_velocity[i]                            = fluid_velocity[i];
+    particle_velocity[m_n_velocity_points + i]      = fluid_velocity[m_n_velocity_points + i];
+    particle_velocity[2 * m_n_velocity_points + i]  = fluid_velocity[2 * m_n_velocity_points + i];
   }
+
+  // Also set the particle velocity also to be zero on the boundaries, so what when we add them ,t he boundary values becomes zero
+  memset(particle_velocity + N_Active, 0, N_DirichletDof * SizeOfDouble);
+  memset(particle_velocity + 1 * N_DOF + N_Active, 0, N_DirichletDof * SizeOfDouble);
+  memset(particle_velocity + 2 * N_DOF + N_Active, 0, N_DirichletDof * SizeOfDouble);
+
+  // Now each array has 3 * of N_DOF values, each section for each component of velocity.
+  // In one section of N_DOF, there will be N_Active + ( N_DOF - N_Active) values, where the last N_DOF - N_Active values are Dirichlet values.
+  // We will set these values as zeros for each component of the drift velocity.
+  memset(drift_velocity + N_Active, 0, N_DirichletDof * SizeOfDouble);
+  memset(drift_velocity + 1 * N_DOF + N_Active, 0, N_DirichletDof * SizeOfDouble);
+  memset(drift_velocity + 2 * N_DOF + N_Active, 0, N_DirichletDof * SizeOfDouble);
 
   // Free the memory allocated for the FEFunction3D
   delete comp0;
@@ -758,7 +769,6 @@ void TSystemPBE3D::SolveDriftVelocity(double timestep, int internal_level,
     V_z_dx[index] = values[1];
     V_z_dy[index] = values[2];
     V_z_dz[index] = values[3];
-
 
   }
 

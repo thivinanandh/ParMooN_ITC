@@ -614,7 +614,6 @@ int main(int argc, char* argv[])
 //======================================================================
     limit = TDatabase::ParamDB->SC_NONLIN_RES_NORM_MIN_SADDLE;
     Max_It = TDatabase::ParamDB->SC_NONLIN_MAXIT_SADDLE;
-
     for(j=1;j<=Max_It;j++)
     {      
       // Solve the NSE system
@@ -685,16 +684,69 @@ int main(int argc, char* argv[])
       Output->WriteVtk(os.str().c_str());
       img++;
      }   
- 
+
+  // TOutput3D* interpolation_output = new TOutput3D(2, 6, 4, 4, Domain);
+
+  // // get all the co-ordinates.
+  // double* coord = new double[3 * N_U];
+  // // Setup a new FE Vect Function to interpolate the solution
+  // TFEVectFunct3D* sol_funct = new TFEVectFunct3D(Velocity_FeSpace[mg_level-1], "U_int", "U_int", coord, N_U, 3);
+  // sol_funct->GridToData();
+
+  // double* u_interpolated = new double[3 * N_U]();
+  // double* grad_u_interpolated = new double[3 * N_U]();
+  // double* error_u = new double[3 * N_U]();
+
+  // // Create new feVectfunctions to interpolate the solution
+  // TFEVectFunct3D* fevect_u_interpolated = new TFEVectFunct3D(Velocity_FeSpace[mg_level-1], "U_interpolated", "U_interpolated", u_interpolated, N_U, 3);
+  // TFEVectFunct3D* fevect_grad_u_interpolated = new TFEVectFunct3D(Velocity_FeSpace[mg_level-1], "Grad_U_interpolated", "Grad_U_interpolated", grad_u_interpolated, N_U, 3);
+  // TFEVectFunct3D* fevect_error_u = new TFEVectFunct3D(Velocity_FeSpace[mg_level-1], "Error_U", "Error_U", error_u, N_U, 3);
+
+
+  // TFEFunction3D* u1_interpolated = fevect_u_interpolated->GetComponent(0);
+  // TFEFunction3D* u2_interpolated = fevect_u_interpolated->GetComponent(1);
+  // TFEFunction3D* u3_interpolated = fevect_u_interpolated->GetComponent(2);
+
+  // TFEFunction3D* grad_u1_interpolated = fevect_grad_u_interpolated->GetComponent(0);
+  // TFEFunction3D* grad_u2_interpolated = fevect_grad_u_interpolated->GetComponent(1);
+  // TFEFunction3D* grad_u3_interpolated = fevect_grad_u_interpolated->GetComponent(2);
+
+  // TFEFunction3D* error_u1 = fevect_error_u->GetComponent(0);
+  // TFEFunction3D* error_u2 = fevect_error_u->GetComponent(1);
+  // TFEFunction3D* error_u3 = fevect_error_u->GetComponent(2);
+
+  // // Add these vect functions to the output
+  // interpolation_output->AddFEVectFunct(u);
+  // interpolation_output->AddFEVectFunct(fevect_u_interpolated);
+  // interpolation_output->AddFEVectFunct(fevect_grad_u_interpolated);
+  // interpolation_output->AddFEVectFunct(fevect_error_u);
+
+  // // Subract the actual solution from the interpolated solution to get the error
+  // for(int i = 0 ; i < 3 * N_U ; i++)
+  // {
+  //   error_u[i] = sol[i] - u_interpolated[i];
+  // }
+
+
+  // // Write the interpolated solution to a file
+  // interpolation_output->WriteVtk("VTK/InterpolatedSolution.vtk");
 
 
 //====================================================================== 
 // measure errors to known solution
 //======================================================================    
+    TDatabase::ParamDB->MEASURE_ERRORS = 1;
     if(TDatabase::ParamDB->MEASURE_ERRORS)
      {   
       SystemMatrix->MeasureErrors(ExactU1, ExactU2,ExactU3,  ExactP, u_error, p_error);
+      cout << "Error in u1-0 : " << u_error[0] << endl;
+      cout << "Error in u2-0 : " << u_error[2] << endl;
+      cout << "Error in u3-0 : " << u_error[4] << endl;
 
+      cout << "Error in u1-1 : " << u_error[1] << endl;
+      cout << "Error in u2-1 : " << u_error[3] << endl;
+      cout << "Error in u3-1 : " << u_error[5] << endl;
+      
        OutPut("L2(u): " <<  sqrt(u_error[0]*u_error[0]+u_error[2]*u_error[2]+u_error[4]*u_error[4]) << endl);
        OutPut("H1-semi(u): " <<  sqrt(u_error[1]*u_error[1]+u_error[3]*u_error[3]+u_error[5]*u_error[5]) << endl);
        OutPut("L2(p): " <<  p_error[0] << endl);

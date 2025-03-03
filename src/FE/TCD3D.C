@@ -45,6 +45,44 @@ void MatrixMRhsAssemble(double Mult, double *coeff, double *param,
   } // endfor i
 }
 
+
+void MatrixMRhsAssembleSUPG(double Mult, double *coeff, double *param,
+                           double hK, 
+                           double **OrigValues, int *N_BaseFuncts,
+                           double ***LocMatrices, double **LocRhs)
+{
+  double **Matrix, *Rhs, *MatrixRow;
+  double ansatz000;
+  double test000;
+  double *Orig0;
+  int i,j, N_;
+  double c5; 
+
+  Matrix = LocMatrices[0];
+  Rhs = LocRhs[0];
+
+  N_ = N_BaseFuncts[0];
+
+  Orig0 = OrigValues[0];
+
+  c5 = coeff[5]; // f
+
+  for(i=0;i<N_;i++)
+  {
+    MatrixRow = Matrix[i];
+    test000 = Orig0[i];
+
+    Rhs[i] += Mult*test000*c5;
+
+    for(j=0;j<N_;j++)
+    {
+      ansatz000 = Orig0[j];
+
+      MatrixRow[j] += Mult*ansatz000*test000;
+    } // endfor j
+  } // endfor i
+}
+
 void MatrixMARhsAssemble_RTE(double Mult, double *coeff, double *param,
                             double hK, 
                             double **OrigValues, int *N_BaseFuncts,
@@ -672,26 +710,28 @@ void MatrixARhsAssembleNSEValues(double Mult, double *coeff, double *param,
       ansatz001 = Orig2[j];
       ansatz000 = Orig3[j];
 
-      // The Original equation was b.\grad(u) -> b_x * u_x + b_y * u_y + b_z * u_z
-      // The variational form will be (b_x * u_x + b_y * u_y + b_z * u_z) * v
-      // Now, the original form is b.\grad(u) + \grad(b).u -> b_x * u_x + b_y * u_y + b_z * u_z + (b_x * v_x + b_y * v_y + b_z * v_z) * u
+      // The Original equation was b.\grad(C) , which is b_x*dC/dx + b_y*dC/dy + b_z*dC/dz
+      // IN this case, we need to use, \nabla \cdot (b C) = b.\grad(C) + d(b_x)/dx * C + d(b_y)/dy * C + d(b_z)/dz * C
+      b_x = 1.0;
+      b_y = 0.0;
+      b_z = 0.0;
+      c0 = 0.1;
 
+      // Brownian (Stokes) diffusion equation
       val = c0*(test100*ansatz100+test010*ansatz010+test001*ansatz001);
+      // b.\grad(C)
       val += (b_x*ansatz100+b_y*ansatz010+b_z*ansatz001)*test000;
+      // ( d(b_x)/dx + d(b_y)/dy + d(b_z)/dz ) * C
       val += (b_x_grad_x + b_y_grad_y + b_z_grad_z) * ansatz000 * test000;
       // val += c4*ansatz000*test000;
-
       MatrixRowA[j] += Mult * val;
     } // endfor j
   } // endfor i
 }
 
 
-
-
-
 // Function performs assembly with NSE-3D values at the quadrature points
-void MatrixARhsAssembleEulerianParticle(double Mult, double *coeff, double *param,
+void MatrixARhsAssembleNSEValuesSUPG(double Mult, double *coeff, double *param,
                             double hK, 
                             double **OrigValues, int *N_BaseFuncts,
                             double ***LocMatrices, double **LocRhs)
@@ -755,19 +795,335 @@ void MatrixARhsAssembleEulerianParticle(double Mult, double *coeff, double *para
       ansatz001 = Orig2[j];
       ansatz000 = Orig3[j];
 
-      // The Original equation was b.\grad(u) -> b_x * u_x + b_y * u_y + b_z * u_z
-      // The variational form will be (b_x * u_x + b_y * u_y + b_z * u_z) * v
-      // Now, the original form is b.\grad(u) + \grad(b).u -> b_x * u_x + b_y * u_y + b_z * u_z + (b_x * v_x + b_y * v_y + b_z * v_z) * u
+      // The Original equation was b.\grad(C) , which is b_x*dC/dx + b_y*dC/dy + b_z*dC/dz
+      // IN this case, we need to use, \nabla \cdot (b C) = b.\grad(C) + d(b_x)/dx * C + d(b_y)/dy * C + d(b_z)/dz * C
+      b_x = 1.0;
+      b_y = 0.0;
+      b_z = 0.0;
+      c0 = 0.1;
 
+      // Brownian (Stokes) diffusion equation
       val = c0*(test100*ansatz100+test010*ansatz010+test001*ansatz001);
+      // b.\grad(C)
       val += (b_x*ansatz100+b_y*ansatz010+b_z*ansatz001)*test000;
+      // ( d(b_x)/dx + d(b_y)/dy + d(b_z)/dz ) * C
       val += (b_x_grad_x + b_y_grad_y + b_z_grad_z) * ansatz000 * test000;
       // val += c4*ansatz000*test000;
+      MatrixRowA[j] += Mult * val;
+    } // endfor j
+  } // endfor i
+}
+
+
+
+
+
+// Function performs assembly with NSE-3D values at the quadrature points
+void MatrixARhsAssembleEulerianParticle_x(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs)
+{
+  // cout << " TCD3D Assemble with NSE-3D values " << endl;
+  double **MatrixA, **MatrixK, *Rhs, val, *MatrixRowA, *MatrixRowK;
+  double ansatz000, ansatz100, ansatz010, ansatz001;
+  double test000, test100, test010, test001;
+  double *Orig0, *Orig1, *Orig2, *Orig3;
+  int i,j, N_;
+  double c0, c1, c2, c3, c4, c5, Pe; 
+
+    // Expected AUX param values for Reference
+    //   int FEFctIndexVelo_EP[9] = {
+    //     0, 1, 2,      // u1, u2, u3
+    //     0, 1, 2,      // du1/dx, du2/dy, du3/dz 
+    //     3, 4, 5       // particle velocities
+    // };
+
+    // MultiIndex3D FEMultiIndexVelo_EP[9] = {
+    //     D000, D000, D000,  // values for velocities
+    //     D100, D010, D001,  // x-component derivatives
+    //     D000, D000, D000   // particle velocity values
+    // };
+
+
+    MatrixA = LocMatrices[0];
+    Rhs = LocRhs[0];
+
+    N_ = N_BaseFuncts[0];
+
+    Orig0 = OrigValues[0];
+    Orig1 = OrigValues[1];
+    Orig2 = OrigValues[2];
+    Orig3 = OrigValues[3];
+
+    // c0 = coeff[0]; // eps
+    // c4 = coeff[4]; // c
+    // c5 = coeff[5]; // f
+
+
+    // Get base flow velocities from aux param
+    double u1 = param[0];   // u_x
+    double u2 = param[1];   // u_y
+    double u3 = param[2];   // u_z
+
+    // Get base flow gradients for current component from aux param
+    double du1_dx = param[3];  // du_1/dx
+    double du2_dy = param[4];  // du_2/dy
+    double du3_dz = param[5];  // du_3/dz
+
+    // Get particle velocities from aux param
+    double ul1 = param[6];   // u_ℓ_x
+    double ul2 = param[7];   // u_ℓ_y
+    double ul3 = param[8];   // u_ℓ_z
+
+    // Get parameters
+    // double tau = coeff[0];     // relaxation time
+    // double gamma = coeff[1];   // density ratio
+    // double grav = coeff[2];    // gravity component
+
+    double tau = 3.07e-4;
+    val = 0.0;
+
+    
+  // b_x = 0.0;
+  // b_y = 1.0;
+  // b_z = 0.0;
+  // cout << " bx = " << b_x << " by = " << b_y << " bz = " << b_z << endl;
+  // cout << " bx_grad_x = " << b_x_grad_x << " by_grad_y = " << b_y_grad_y << " bz_grad_z = " << b_z_grad_z << endl;  
+  
+  for(i=0;i<N_;i++)
+  {
+    MatrixRowA = MatrixA[i];
+    test100 = Orig0[i];
+    test010 = Orig1[i];
+    test001 = Orig2[i];
+    test000 = Orig3[i];
+
+    // Rhs[i] += Mult*test000*c5;
+    // Add explicit terms to RHS (with negative sign as moved to RHS)
+    // Base flow self advection: -(u·∇)u
+    Rhs[i] -= Mult * test000 * (u1*du1_dx + u2*du2_dy + u3*du3_dz);
+
+    for(j=0;j<N_;j++)
+    {
+      ansatz100 = Orig0[j];
+      ansatz010 = Orig1[j];
+      ansatz001 = Orig2[j];
+      ansatz000 = Orig3[j];
+
+      // // Term 1: (u·∇)u_ℓ
+      val += test000 * (u1*ansatz100 + u2*ansatz010 + u3*ansatz001);
+
+      // // Term 2: (u_ℓ·∇)u
+      val += test000 * ansatz000 * du1_dx;
+
+      // // Term 3: (u_ℓ·∇)u_ℓ
+      val += test000 * (ul1*ansatz100 + ul2*ansatz010 + ul3*ansatz001);
+
+      // Term 4: (1/τ)u_ℓ
+      val += (1.0/tau) * test000 * ansatz000;
 
       MatrixRowA[j] += Mult * val;
     } // endfor j
   } // endfor i
 }
+
+
+// Function performs assembly with NSE-3D values at the quadrature points
+void MatrixARhsAssembleEulerianParticle_y(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs)
+{
+  // cout << " TCD3D Assemble with NSE-3D values " << endl;
+  double **MatrixA, **MatrixK, *Rhs, val, *MatrixRowA, *MatrixRowK;
+  double ansatz000, ansatz100, ansatz010, ansatz001;
+  double test000, test100, test010, test001;
+  double *Orig0, *Orig1, *Orig2, *Orig3;
+  int i,j, N_;
+  double c0, c1, c2, c3, c4, c5, Pe; 
+
+  MatrixA = LocMatrices[0];
+  Rhs = LocRhs[0];
+
+  N_ = N_BaseFuncts[0];
+
+  Orig0 = OrigValues[0];
+  Orig1 = OrigValues[1];
+  Orig2 = OrigValues[2];
+  Orig3 = OrigValues[3];
+
+  // c0 = coeff[0]; // eps
+  // c4 = coeff[4]; // c
+  // c5 = coeff[5]; // f
+
+
+    // Get base flow velocities from aux param
+    double u1 = param[0];   // u_x
+    double u2 = param[1];   // u_y
+    double u3 = param[2];   // u_z
+
+    // Get base flow gradients for current component from aux param
+    double du1_dx = param[3];  // du_i/dx
+    double du2_dy = param[4];  // du_i/dy
+    double du3_dz = param[5];  // du_i/dz
+
+    // Get particle velocities from aux param
+    double ul1 = param[6];   // u_ℓ_x
+    double ul2 = param[7];   // u_ℓ_y
+    double ul3 = param[8];   // u_ℓ_z
+
+    // Get parameters
+    // double tau = coeff[0];     // relaxation time
+    // double gamma = coeff[1];   // density ratio
+    // double grav = coeff[2];    // gravity component
+
+    double tau = 3.07e-4;
+    val = 0.0;
+
+    
+  // b_x = 0.0;
+  // b_y = 1.0;
+  // b_z = 0.0;
+  // cout << " bx = " << b_x << " by = " << b_y << " bz = " << b_z << endl;
+  // cout << " bx_grad_x = " << b_x_grad_x << " by_grad_y = " << b_y_grad_y << " bz_grad_z = " << b_z_grad_z << endl;  
+  
+  for(i=0;i<N_;i++)
+  {
+    MatrixRowA = MatrixA[i];
+    test100 = Orig0[i];
+    test010 = Orig1[i];
+    test001 = Orig2[i];
+    test000 = Orig3[i];
+
+    // Rhs[i] += Mult*test000*c5;
+    // Add explicit terms to RHS (with negative sign as moved to RHS)
+    // Base flow self advection: -(u·∇)u
+    Rhs[i] -= Mult * test000 * (u1*du1_dx + u2*du2_dy + u3*du3_dz);
+
+    for(j=0;j<N_;j++)
+    {
+      ansatz100 = Orig0[j];
+      ansatz010 = Orig1[j];
+      ansatz001 = Orig2[j];
+      ansatz000 = Orig3[j];
+
+      // Term 1: (u·∇)u_ℓ
+      val += test000 * (u1*ansatz100 + u2*ansatz010 + u3*ansatz001);
+
+      // // Term 2: (u_ℓ·∇)u
+      val += test000 * ansatz000 * du2_dy;
+
+      // // Term 3: (u_ℓ·∇)u_ℓ
+      val += test000 * (ul1*ansatz100 + ul2*ansatz010 + ul3*ansatz001);
+
+      // Term 4: (1/τ)u_ℓ
+      val += (1.0/tau) * test000 * ansatz000;
+
+      MatrixRowA[j] += Mult * val;
+    } // endfor j
+  } // endfor i
+}
+
+
+// Function performs assembly with NSE-3D values at the quadrature points
+void MatrixARhsAssembleEulerianParticle_z(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs)
+{
+  // cout << " TCD3D Assemble with NSE-3D values " << endl;
+  double **MatrixA, **MatrixK, *Rhs, val, *MatrixRowA, *MatrixRowK;
+  double ansatz000, ansatz100, ansatz010, ansatz001;
+  double test000, test100, test010, test001;
+  double *Orig0, *Orig1, *Orig2, *Orig3;
+  int i,j, N_;
+  double c0, c1, c2, c3, c4, c5, Pe; 
+
+  MatrixA = LocMatrices[0];
+  Rhs = LocRhs[0];
+
+  N_ = N_BaseFuncts[0];
+
+  Orig0 = OrigValues[0];
+  Orig1 = OrigValues[1];
+  Orig2 = OrigValues[2];
+  Orig3 = OrigValues[3];
+
+  // c0 = coeff[0]; // eps
+  // c4 = coeff[4]; // c
+  // c5 = coeff[5]; // f
+
+
+
+
+    // Get base flow velocities from aux param
+    double u1 = param[0];   // u_x
+    double u2 = param[1];   // u_y
+    double u3 = param[2];   // u_z
+
+    // Get base flow gradients for current component from aux param
+    double du1_dx = param[3];  // du_i/dx
+    double du2_dy = param[4];  // du_i/dy
+    double du3_dz = param[5];  // du_i/dz
+
+    // Get particle velocities from aux param
+    double ul1 = param[6];   // u_ℓ_x
+    double ul2 = param[7];   // u_ℓ_y
+    double ul3 = param[8];   // u_ℓ_z
+
+    // Get parameters
+    // double tau = coeff[0];     // relaxation time
+    // double gamma = coeff[1];   // density ratio
+    // double grav = coeff[2];    // gravity component
+
+    double tau = 3.07e-4;
+    val = 0.0;
+
+    
+  // b_x = 0.0;
+  // b_y = 1.0;
+  // b_z = 0.0;
+  // cout << " bx = " << b_x << " by = " << b_y << " bz = " << b_z << endl;
+  // cout << " bx_grad_x = " << b_x_grad_x << " by_grad_y = " << b_y_grad_y << " bz_grad_z = " << b_z_grad_z << endl;  
+  
+  for(i=0;i<N_;i++)
+  {
+    MatrixRowA = MatrixA[i];
+    test100 = Orig0[i];
+    test010 = Orig1[i];
+    test001 = Orig2[i];
+    test000 = Orig3[i];
+
+    // Rhs[i] += Mult*test000*c5;
+    // Add explicit terms to RHS (with negative sign as moved to RHS)
+    // Base flow self advection: -(u·∇)u
+    Rhs[i] -= Mult * test000 * (u1*du1_dx + u2*du2_dy + u3*du3_dz);
+
+    for(j=0;j<N_;j++)
+    {
+      ansatz100 = Orig0[j];
+      ansatz010 = Orig1[j];
+      ansatz001 = Orig2[j];
+      ansatz000 = Orig3[j];
+
+      // // Term 1: (u·∇)u_ℓ
+      val += test000 * (u1*ansatz100 + u2*ansatz010 + u3*ansatz001);
+
+      // // Term 2: (u_ℓ·∇)u
+      val += test000 * ansatz000 * du3_dz;
+
+      // // Term 3: (u_ℓ·∇)u_ℓ
+      val += test000 * (ul1*ansatz100 + ul2*ansatz010 + ul3*ansatz001);
+
+      // Term 4: (1/τ)u_ℓ
+      val += (1.0/tau) * test000 * ansatz000;
+
+      MatrixRowA[j] += Mult * val;
+    } // endfor j
+  } // endfor i
+}
+
 
 
 void MatrixAUpwindRhsAssemble(double Mult, double *coeff, double *param,

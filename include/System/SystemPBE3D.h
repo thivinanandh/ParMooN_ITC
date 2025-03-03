@@ -85,6 +85,10 @@ class TSystemPBE3D : public TSystemCD3D
     /** Solve for Drift Velocity */
     void SolveDriftVelocity(double timestep, int i, double *drift_velocity, double *particle_velocity, double *fluid_velocity);
 
+    /** Solve for drift velocity */
+    void SolveDriftVelocity(double timestep, int i, TFEVectFunct3D *drift_velocity, TFEVectFunct3D *particle_velocity, TFEVectFunct3D *fluid_velocity, int RK_Method);
+
+
     /** Solve for Drift Velocity */
     void SolveDriftVelocity(double timestep, int internal_level, 
     TFEVectFunct3D* fluid_fevect,  // Fluid velocity FE vector function

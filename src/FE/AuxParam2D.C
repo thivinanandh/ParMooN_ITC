@@ -1,6 +1,6 @@
 // =======================================================================
 // @(#)AuxParam2D.C        1.2 09/17/99
-// 
+//
 // Class:       TAuxParam2D
 // Purpose:     store parameter functions and FE functions
 //
@@ -21,12 +21,12 @@
 
 /** constructor */
 TAuxParam2D::TAuxParam2D(
-        int n_fespace2d, int n_fefunction2d, int n_paramfct,
-        int n_fevalues,
-        TFESpace2D **fespaces2d, TFEFunction2D **fefunctions2d,
-        ParamFct **parameterfct,
-        int *fevalue_fctindex, MultiIndex2D *fevalue_multiindex,
-        int n_parameters, int *beginparameter)
+    int n_fespace2d, int n_fefunction2d, int n_paramfct,
+    int n_fevalues,
+    TFESpace2D **fespaces2d, TFEFunction2D **fefunctions2d,
+    ParamFct **parameterfct,
+    int *fevalue_fctindex, MultiIndex2D *fevalue_multiindex,
+    int n_parameters, int *beginparameter)
 {
   N_FESpace2D = n_fespace2d;
   N_FEFunction2D = n_fefunction2d;
@@ -45,9 +45,9 @@ TAuxParam2D::TAuxParam2D(
 
   Temp = new double[2 + N_FEValues];
 
-  Values = new double* [N_FEValues];
-  OrigValues = new double** [N_FEValues];
-  Index = new int* [N_FEValues];
+  Values = new double *[N_FEValues];
+  OrigValues = new double **[N_FEValues];
+  Index = new int *[N_FEValues];
   N_BaseFunct = new int[N_FEValues];
 }
 
@@ -64,47 +64,45 @@ TAuxParam2D::TAuxParam2D(
 //   {
 //     N_FESpace2D = 0;
 //     FESpaces2D = NULL;
-//    
+//
 //     N_FEFunction2D = 2;
 //     FEFunctions2D = fefunctions2d;
-// 
+//
 //     N_ParamFct = 1;
 //     N_FEValues = 2;
-//     
+//
 //     // for all arrays defined below: see NSE2D_ParamRout.h and NSE2D_FixPo.C
 //     ParameterFct = NSFctVelo;
 //     FEValue_FctIndex = NSFEFctIndexVelo; // {0,1}
 //     FEValue_MultiIndex = NSFEMultiIndexVelo; // {D00,D00}
-//     
+//
 //     N_Parameters = 2;
 //     BeginParameter = NSBeginParamVelo; // {0}
-//     
-//   } 
+//
+//   }
 //   else
 //   {
-//     cout << " AuxParam2D:: Constructor: ERROR, name " << name 
+//     cout << " AuxParam2D:: Constructor: ERROR, name " << name
 //          << " for initialization not imlpemented " << endl;
 //     exit(1);
 //   }
-//   
+//
 //   Temp = new double[2 + N_FEValues];
-//   
+//
 //   Values = new double* [N_FEValues];
 //   OrigValues = new double** [N_FEValues];
 //   Index = new int* [N_FEValues];
 //   N_BaseFunct = new int[N_FEValues];
-// 
-// 
+//
+//
 // }
-
-
 
 /** return all parameters at all quadrature points */
 void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll,
-                              TBaseCell *cell, int cellnum,
-                              double *Xi, double *Eta,
-                              double *X, double *Y,
-                              double **Parameters)
+                                TBaseCell *cell, int cellnum,
+                                double *Xi, double *Eta,
+                                double *X, double *Y,
+                                double **Parameters)
 {
   int i, j, k, l, n;
   double xi, *param, *currparam, s;
@@ -119,10 +117,10 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll,
   int *CurrIndex;
 
   // collect information
-  for(j=0;j<N_FEValues;j++)
+  for (j = 0; j < N_FEValues; j++)
   {
     fefunction = FEFunctions2D[FEValue_FctIndex[j]];
-    
+
     Values[j] = fefunction->GetValues();
     //  if (N_FEValues==8)
     //  OutPut("aac " << (int) fefunction << " " <<  Values[j][0]<< endl);
@@ -131,8 +129,8 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll,
     FE_Id = fespace->GetFE2D(cellnum, cell);
     BaseFunct_Id = TFEDatabase2D::GetFE2D(FE_Id)->GetBaseFunct2D_ID();
 
-    N_BaseFunct[j]=TFEDatabase2D::GetBaseFunct2D(BaseFunct_Id)->GetDimension();
-    
+    N_BaseFunct[j] = TFEDatabase2D::GetBaseFunct2D(BaseFunct_Id)->GetDimension();
+
     OrigValues[j] = TFEDatabase2D::GetOrigElementValues(BaseFunct_Id, FEValue_MultiIndex[j]);
     GlobalNumbers = fespace->GetGlobalNumbers();
     BeginIndex = fespace->GetBeginIndex();
@@ -140,7 +138,7 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll,
   } // endfor j
 
   // loop over all quadrature points
-  for(i=0;i<N_Points;i++)
+  for (i = 0; i < N_Points; i++)
   {
     param = Parameters[i];
 
@@ -148,20 +146,20 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll,
     Temp[1] = Y[i];
 
     // loop to calculate all FE values
-    for(k=2,j=0;j<N_FEValues;j++,k++)
+    for (k = 2, j = 0; j < N_FEValues; j++, k++)
     {
       s = 0;
       n = N_BaseFunct[j];
       CurrValues = Values[j];
       CurrOrigValues = OrigValues[j][i];
       CurrIndex = Index[j];
-      for(l=0;l<n;l++)
-        s += CurrValues[CurrIndex[l]]*CurrOrigValues[l];
+      for (l = 0; l < n; l++)
+        s += CurrValues[CurrIndex[l]] * CurrOrigValues[l];
       Temp[k] = s;
-    }  // endfor j
+    } // endfor j
 
     // loop to calculate all parameters
-    for(j=0;j<N_ParamFct;j++)
+    for (j = 0; j < N_ParamFct; j++)
     {
       currparam = param + BeginParameter[j];
       ParameterFct[j](Temp, currparam);
@@ -171,9 +169,9 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll,
 
 /** return all parameters at all quadrature points on the boundary*/
 void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll, TBaseCell *cell, int cellnum,
-				double *t, int joint, double **Parameters)
+                                double *t, int joint, double **Parameters)
 {
-  int i,j,k,l,n, N_Cells;
+  int i, j, k, l, n, N_Cells;
   double xv, yv, xi, eta, eps = 1e-20;
   double s;
   double *param, *currparam, *CurrValues, *CurrOrigValues;
@@ -188,7 +186,7 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll, TBaseCell *cell
   double uorig[MaxN_BaseFunctions2D], uxorig[MaxN_BaseFunctions2D];
   double uyorig[MaxN_BaseFunctions2D], uref[MaxN_BaseFunctions2D];
   double uxiref[MaxN_BaseFunctions2D], uetaref[MaxN_BaseFunctions2D];
-  
+
   int *Numbers;
   double u, ux, uy;
   double val;
@@ -196,12 +194,12 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll, TBaseCell *cell
 
   double X, Y, absdetjk;
 
-  AllBaseFuncts = new TBaseFunct2D*[N_FEValues];
+  AllBaseFuncts = new TBaseFunct2D *[N_FEValues];
 
-  for(j=0;j<N_FEValues;j++)
+  for (j = 0; j < N_FEValues; j++)
   {
     fefunction = FEFunctions2D[FEValue_FctIndex[j]];
-    
+
     Values[j] = fefunction->GetValues();
 
     fespace = fefunction->GetFESpace2D();
@@ -210,7 +208,7 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll, TBaseCell *cell
 
     AllBaseFuncts[j] = TFEDatabase2D::GetBaseFunct2D(BaseFunct_Id);
     N_BaseFunct[j] = AllBaseFuncts[j]->GetDimension();
-    
+
     GlobalNumbers = fespace->GetGlobalNumbers();
     BeginIndex = fespace->GetBeginIndex();
     Index[j] = GlobalNumbers + BeginIndex[cellnum];
@@ -220,29 +218,29 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll, TBaseCell *cell
   RefTrans = FE_Obj->GetRefTransID();
   // set cell for reference transformation
   TFEDatabase2D::SetCellForRefTrans(cell, RefTrans);
-  
-  for(i=0;i<N_Points;i++)
+
+  for (i = 0; i < N_Points; i++)
   {
-    switch(joint)
+    switch (joint)
     {
-    case 0: 
-      xi=t[i];
-      eta=-1;
-      break; 
-    case 1: 
-      xi=1;
-      eta=t[i];
+    case 0:
+      xi = t[i];
+      eta = -1;
       break;
-    case 2: 
-      xi=-t[i];
-      eta=1;
+    case 1:
+      xi = 1;
+      eta = t[i];
       break;
-    case 3: 
-      xi=-1;
-      eta=-t[i];
+    case 2:
+      xi = -t[i];
+      eta = 1;
       break;
-    }//switch
-//     cout << "xi eta " << xi << " " << eta << endl;
+    case 3:
+      xi = -1;
+      eta = -t[i];
+      break;
+    } // switch
+    //     cout << "xi eta " << xi << " " << eta << endl;
 
     param = Parameters[i];
 
@@ -251,7 +249,7 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll, TBaseCell *cell
     // Temp[1] = Y[i];
 
     // loop to calculate all FE values
-    for(k=2,j=0;j<N_FEValues;j++,k++)
+    for (k = 2, j = 0; j < N_FEValues; j++, k++)
     {
       s = 0;
       n = N_BaseFunct[j];
@@ -263,54 +261,54 @@ void TAuxParam2D::GetParameters(int N_Points, TCollection *Coll, TBaseCell *cell
       bf->GetDerivatives(D00, xi, eta, uref);
       bf->GetDerivatives(D10, xi, eta, uxiref);
       bf->GetDerivatives(D01, xi, eta, uetaref);
-  
-      // compute values on the original mesh cell 
+
+      // compute values on the original mesh cell
       TFEDatabase2D::GetOrigValues(RefTrans, xi, eta, bf, Coll, (TGridCell *)cell,
-				   uref, uxiref, uetaref, 
-				   uorig, uxorig, uyorig);
-      switch(FEValue_MultiIndex[j])
+                                   uref, uxiref, uetaref,
+                                   uorig, uxorig, uyorig);
+      switch (FEValue_MultiIndex[j])
       {
-        case D00:
-          CurrOrigValues = uorig;
-	break;
-        case D10:
-          CurrOrigValues = uxorig;
-	break;
-        case D01:
-          CurrOrigValues = uyorig;
-	break;
-        default:
-         cerr << "Second derivatives not added, see AuxParam2D "  << endl;
-          exit (-1);
-         break;
+      case D00:
+        CurrOrigValues = uorig;
+        break;
+      case D10:
+        CurrOrigValues = uxorig;
+        break;
+      case D01:
+        CurrOrigValues = uyorig;
+        break;
+      default:
+        cerr << "Second derivatives not added, see AuxParam2D " << endl;
+        exit(-1);
+        break;
       } // endswitch
       // cout << "CurrOrigValues" << *uorig << endl;
       // cout << "CurrOrigValuesx" << *uxorig << endl;
       CurrIndex = Index[j];
-      for(l=0;l<n;l++)
-      { 
-	s += CurrValues[CurrIndex[l]]*CurrOrigValues[l];
-	// cout << "Parameter   " << CurrOrigValues[l] << endl;
+      for (l = 0; l < n; l++)
+      {
+        s += CurrValues[CurrIndex[l]] * CurrOrigValues[l];
+        // cout << "Parameter   " << CurrOrigValues[l] << endl;
       }
       Temp[k] = s;
-    }  // endfor j
+    } // endfor j
 
     // loop to calculate all parameters
-    for(j=0;j<N_ParamFct;j++)
+    for (j = 0; j < N_ParamFct; j++)
     {
       currparam = param + BeginParameter[j];
       ParameterFct[j](Temp, currparam);
     } // endfor j
-  } // endfor i 
+  } // endfor i
   delete AllBaseFuncts;
 }
 
 /** destructor */
 TAuxParam2D::~TAuxParam2D()
 {
-  delete [] Temp;
-  delete [] Values;
-  delete [] OrigValues;
-  delete [] Index;
-  delete [] N_BaseFunct;
+  delete[] Temp;
+  delete[] Values;
+  delete[] OrigValues;
+  delete[] Index;
+  delete[] N_BaseFunct;
 }

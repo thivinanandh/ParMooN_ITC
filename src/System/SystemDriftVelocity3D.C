@@ -93,9 +93,107 @@ TSystemDriftVelocity3D::~TSystemDriftVelocity3D()
 }
 
 
+// void TSystemDriftVelocity3D::Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue,
+//                               TAuxParam3D *aux )
+// {
+// #ifdef _MPI
+//    if(SOLVER == DIRECT)
+//    {
+//      SQMATRICES[0] = sqmatrixM[N_Levels-1];
+//      TDS = new TParDirectSolver(ParComm[N_Levels-1],NULL,SQMATRICES,NULL);
+//    }
+// #endif
+
+// #ifdef _OMPONLY
+//    if(SOLVER == DIRECT && TDatabase::ParamDB->DSType == 1)
+//    {
+//      DS = new TParDirectSolver(sqmatrixM[N_Levels-1]);
+//    }
+// #endif 
+
+//  int i; 
+  
+//   BoundaryConditions[0] = BoundCond;
+//   BoundaryValues[0] = BoundValue;
+  
+//   TDiscreteForm3D *DiscreteFormMRhs_Galerkin;
+//   TDiscreteForm3D *DiscreteFormARhs_Galerkin; 
+//   TDiscreteForm3D *DiscreteFormARhs_Galerkin_2; 
+//   TDiscreteForm3D *DiscreteFormARhs_Galerkin_3; 
+
+// //   TDiscreteForm3D *DiscreteFormMRhs_SUPG;
+// //   TDiscreteForm3D *DiscreteFormARhs_SUPG;
+
+  
+//   InitializeDiscreteFormsEulerianDriftParticle(DiscreteFormMRhs_Galerkin, DiscreteFormARhs_Galerkin, 
+//                                             DiscreteFormARhs_Galerkin_2, DiscreteFormARhs_Galerkin_3, DiscreteFormRhs, BilinearCoeffs);
+  
+//     switch(Disctype)
+//      {
+//       case GALERKIN:
+//            DiscreteFormARhs = DiscreteFormARhs_Galerkin;
+//            DiscreteFormMRhs = DiscreteFormMRhs_Galerkin;
+//       break;
+      
+//       default:
+//             OutPut("Unknown or not yet implemented DISCTYPE" << endl);
+//             exit(4711);;
+//      }  
+   
+//    // initialize the assemble 
+//    if(aux==NULL)
+//     { aux = new TAuxParam3D(1, 0, 0, 0, fesp, NULL, NULL, NULL, NULL, 0, NULL); }
+    
+//     for(i=Start_Level;i<N_Levels;i++)
+//     { 
+//      fesp[0] = FeSpaces[i];
+//      ferhs[0] = FeSpaces[i];  
+     
+//      RHSs[0] = RhsArray[i];
+  
+//      // A Matrix     
+//      SQMATRICES[0] = sqmatrixA[i];
+//      AMatRhsAssemble[i] = new TAssembleMat3D(1, fesp, 1, SQMATRICES, 0, NULL, 1, RHSs, ferhs, 
+//                               DiscreteFormARhs, BoundaryConditions, BoundaryValues, aux);
+//      AMatRhsAssemble[i]->Init();
+  
+//      // M matrix     
+//      SQMATRICES[0] = sqmatrixM[i];
+//      MMatRhsAssemble[i] = new TAssembleMat3D(1, fesp, 1, SQMATRICES, 0, NULL, 1, RHSs, ferhs, 
+//                               DiscreteFormMRhs, BoundaryConditions, BoundaryValues, aux);
+//      MMatRhsAssemble[i]->Init();   
+      
+//      //setup the multigrid solver
+//      if(SOLVER==GMG)
+//       {
+// #ifdef _MPI  
+//        MGLevel = new TMGLevel3D(i, SQMATRICES[0], RHSs[0], SolArray[i], ParComm[i], ParMapper[i], N_aux, NULL);
+// #else
+//        MGLevel = new TMGLevel3D(i, SQMATRICES[0], RHSs[0], SolArray[i], N_aux, NULL);
+// #endif
+//        MG->AddLevel(MGLevel);
+//       }  
+      
+//     } // for(i=Star 
+// } // Init
+
 void TSystemDriftVelocity3D::Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue,
-                              TAuxParam3D *aux )
+                              TAuxParam3D *aux , int component, int type)
 {
+
+  // Error checking
+  if (component < 0 || component > 2)
+  {
+    OutPut("Component should be 0, 1 or 2" << endl);
+    exit(4711);
+  }
+
+  if (type < 0 || type > 2)
+  {
+    OutPut("Type should be 0, 1 or 2" << endl);
+    exit(4711);
+  }
+
 #ifdef _MPI
    if(SOLVER == DIRECT)
    {
@@ -118,24 +216,77 @@ void TSystemDriftVelocity3D::Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *
   
   TDiscreteForm3D *DiscreteFormMRhs_Galerkin;
   TDiscreteForm3D *DiscreteFormARhs_Galerkin; 
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_x; 
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_x_2;
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_x_3;
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_y;
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_y_2;
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_y_3;
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_z;
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_z_2;
+  TDiscreteForm3D *DiscreteFormARhs_Galerkin_z_3; 
+
 //   TDiscreteForm3D *DiscreteFormMRhs_SUPG;
 //   TDiscreteForm3D *DiscreteFormARhs_SUPG;
 
   
-  InitializeDiscreteFormsEulerianDriftParticle(DiscreteFormMRhs_Galerkin, DiscreteFormARhs_Galerkin, DiscreteFormRhs, BilinearCoeffs);
+  InitializeDiscreteFormsEulerianDriftParticle(DiscreteFormMRhs_Galerkin, 
+                                            DiscreteFormARhs_Galerkin_x, DiscreteFormARhs_Galerkin_x_2, DiscreteFormARhs_Galerkin_x_3,
+                                            DiscreteFormARhs_Galerkin_y, DiscreteFormARhs_Galerkin_y_2, DiscreteFormARhs_Galerkin_y_3,
+                                            DiscreteFormARhs_Galerkin_z, DiscreteFormARhs_Galerkin_z_2, DiscreteFormARhs_Galerkin_z_3,
+                                            DiscreteFormRhs, BilinearCoeffs);
   
     switch(Disctype)
      {
       case GALERKIN:
-//       case LOCAL_PROJECTION:
-           DiscreteFormARhs = DiscreteFormARhs_Galerkin;
+           if (component == 0)
+           {
+             if (type == 0)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_x;
+             }
+             else if (type == 1)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_x_2;
+             }
+             else if (type == 2)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_x_3;
+             }
+           }
+           else if (component == 1)
+           {
+             if (type == 0)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_y;
+             }
+             else if (type == 1)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_y_2;
+             }
+             else if (type == 2)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_y_3;
+             }
+           }
+           else if (component == 2)
+           {
+             if (type == 0)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_z;
+             }
+             else if (type == 1)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_z_2;
+             }
+             else if (type == 2)
+             {
+               DiscreteFormARhs = DiscreteFormARhs_Galerkin_z_3;
+             }
+           }
+          //  DiscreteFormARhs = DiscreteFormARhs_Galerkin;
            DiscreteFormMRhs = DiscreteFormMRhs_Galerkin;
       break;
-      
-//       case SUPG:
-//            DiscreteFormARhs = DiscreteFormARhs_SUPG;
-//            DiscreteFormMRhs = DiscreteFormMRhs_SUPG;
-//       break;
       
       default:
             OutPut("Unknown or not yet implemented DISCTYPE" << endl);
@@ -178,6 +329,7 @@ void TSystemDriftVelocity3D::Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *
       
     } // for(i=Star 
 } // Init
+
 
 void TSystemDriftVelocity3D::AssembleMRhs()
 {
@@ -222,9 +374,9 @@ void TSystemDriftVelocity3D::AssembleARhs()
 
      /** reset the matrix and rhs */
      AMatRhsAssemble[i]->Reset(); 
-    
+      
      // assemble
-     AMatRhsAssemble[i]->Assemble3D();     
+     AMatRhsAssemble[i]->Assemble3D();   
 
      /** set rhs for Dirichlet nodes */
      memcpy(SolArray[i]+N_Active, RhsArray[i]+N_Active, (N_DOF_low - N_Active)*SizeOfDouble);           

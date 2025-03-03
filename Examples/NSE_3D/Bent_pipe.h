@@ -52,21 +52,21 @@ void ExactU2(double x, double y,  double z, double *values)
 void ExactU3(double x, double y,  double z, double *values)
 {
  
-  values[0] = 1-(x*x+y*y);
-  values[1] = -2*x;
-  values[2] = -2*y;
+  values[0] = 0.0;
+  values[1] = 0.0;
+  values[2] = 0.0;
   values[3] = 0;
-  values[4] = -4;
+  values[4] = 0.0;
 }
 
 void ExactP(double x, double y,  double z, double *values)
 {
   static double eps = 1/TDatabase::ParamDB->RE_NR;
 
-  values[0] = 4*eps*(10-z);
+  values[0] = 0;
   values[1] = 0;
   values[2] = 0;
-  values[3] = -4*eps;
+  values[3] = 0;
   values[4] = 0;
 }
 

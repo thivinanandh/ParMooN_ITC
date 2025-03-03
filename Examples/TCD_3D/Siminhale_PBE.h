@@ -24,9 +24,9 @@ void ExampleFile()
 }
 
 // ========================================================================
-// Boundary conditions for the popilation balance equation
+// Boundary conditions for the population balance equation
 // ========================================================================
-
+// All Neumann, Since only initial concentration is provided within the domain on the inlet.
 void BoundCondition(int dummy,double x, double y, double z, BoundCond &cond)
 {
   cond = NEUMANN;
@@ -37,6 +37,48 @@ void BoundValue(int dummy,double x, double y, double z, double &value)
 {
  double t = TDatabase::TimeDB->CURRENTTIME;
   value = 0; // Zero Neumann Everywhere
+}
+
+// ========================================================================
+// exact solution
+// ========================================================================
+void ExactU1(double x, double y,  double z, double *values)
+{
+  values[0] = 0;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+  values[4] = 0;
+}
+
+void ExactU2(double x, double y,  double z, double *values)
+{
+  values[0] = 0;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+  values[4] = 0;
+}
+
+void ExactU3(double x, double y,  double z, double *values)
+{
+ 
+  values[0] = 0.0;
+  values[1] = 0.0;
+  values[2] = 0.0;
+  values[3] = 0;
+  values[4] = 0.0;
+}
+
+void ExactP(double x, double y,  double z, double *values)
+{
+  static double eps = 1/TDatabase::ParamDB->RE_NR;
+
+  values[0] = 0;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+  values[4] = 0;
 }
 
 
@@ -52,7 +94,7 @@ void InitialValue(int N_Inputs, double *Inn, double *Out)
   
   // Calculate the distance from the origin (0, 0) in the yz-plane
   double distance = sqrt(y * y + z * z);
-  double distance_threshold = 0.5 * 0.5; // 0.95 times the radius of the unit circle
+  double distance_threshold = 0.25; // 0.95 times the radius of the unit circle
   
   // Check if the point (x, z) lies within the threshold distance and x <= 0.01
   if (distance <= distance_threshold && x <= 1e-04) {
@@ -138,12 +180,15 @@ void BoundCondition_DriftVelocity(int BdComp,  double x, double y, double z,  Bo
 
 // ========================================================================
 // These boundary conditions are used to set Eulerian Particle Velocity
+// This is 
 // ========================================================================
 
-//// ------------- SIMINHALE THIVIN -----------------////
 void BoundCondition_Particle_Velocity(int BdComp,  double x, double y, double z,  BoundCond &cond)
 {
-  	cond = DIRICHLET; 
+  	if (BdComp == 0 )
+      cond = DIRICHLET;
+    else
+      cond = NEUMANN;
 }
 
 // value of boundary condition
@@ -152,14 +197,89 @@ void BoundValue_Particle_Velocity(int dummy,double x, double y, double z, double
   value = 0.0; // Zero Dirichlet Everywhere
 }
 
+// Initial Condition for the Particle velocity Domain
+void Temp_x(double x, double y, double z, double *values)
+{
+  values[0] = x;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+}
+
+void Temp_y(double x, double y, double z, double *values)
+{
+  values[0] = y;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+}
+
+void Temp_z(double x, double y, double z, double *values)
+{
+  values[0] = z;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+}
+
+// Initial Condition for the Particle velocity Domain
+void ExactBoundValueParticleVelocity_x(double x, double y, double z, double *values)
+{
+  values[0] = 0.0;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+}
+
+void ExactBoundValueParticleVelocity_y(double x, double y, double z, double *values)
+{
+  values[0] = 0.0;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+}
+
+
+void ExactBoundValueParticleVelocity_z(double x, double y, double z, double *values)
+{
+  values[0] = 0.0;
+  values[1] = 0;
+  values[2] = 0;
+  values[3] = 0;
+}
+
 
 void Exact_DriftBoundaryValues(double x, double y,  double z, double *values)
 {
-  values[0] = 10.0;
+  values[0] = 0.0;
   values[1] = 0;
   values[2] = 0;
   values[3] = 0;
   values[4] = 0;
+}
+
+
+void BilinearCoeffs_ParticleVelocity(int n_points, double *X, double *Y, double *Z,
+               double **parameters, double **coeffs)
+{
+  int i;
+  double *coeff;                                  // *param;
+  
+
+  for(i=0;i<n_points;i++)
+  {
+    coeff = coeffs[i];
+    double x = X[i];
+    double y = Y[i];
+    double z = Z[i];
+    // diffusion
+    coeff[0] = 1e-1;
+    // Advection values are infered from internal Fluid Velocity
+    // reaction
+    coeff[4] = 0.;
+    // External Forcing
+    coeff[5] = 0.;
+  }
 }
 
 
@@ -337,30 +457,28 @@ void GrowthAndB_Nuc_L0(int N_Inputs, double *Inn, double *Out)
 // Function to update the Internal Size parameters
  void GetLExampleData(int *L_NVertices, double *L_StartEnd, BoundCond1D **BoundConLminLMax, 
                       DoubleFunctND **GrowthAndB_Nuc, double **XPos)
-  {
-   // Internal Co-ordinates
-   
-   // Start of domain
-   L_StartEnd[0] = 0.1;
-   
-   // End of Domain
-   L_StartEnd[1] = 1.0;
-   
-   // Number of cells in domain
-   L_NVertices[0] = 1;
-   
-   // Growth and Nucleation Kernels
-   GrowthAndB_Nuc[0] = GrowthAndB_Nuc_L0;
-   
-   // Boundary Conditions
-   BoundConLminLMax[0] = BoundCondition_LminLMax_L0;
-   
-   // Predefined X-Arrays, If you have any fixed x-arrays, those can be provided here
-   XPos[0] = nullptr;
+{
+  // Internal Co-ordinates
+  
+  // Start of domain
+  L_StartEnd[0] = 0.1;
+  
+  // End of Domain
+  L_StartEnd[1] = 1.0;
+  
+  // Number of cells in domain
+  L_NVertices[0] = 1;
+  
+  // Growth and Nucleation Kernels
+  GrowthAndB_Nuc[0] = GrowthAndB_Nuc_L0;
+  
+  // Boundary Conditions
+  BoundConLminLMax[0] = BoundCondition_LminLMax_L0;
+  
+  // Predefined X-Arrays, If you have any fixed x-arrays, those can be provided here
+  XPos[0] = nullptr;
 
-   }
-
-
+  }
 
 
 // Function to obtain internal Nodal points

@@ -83,6 +83,12 @@ void MatrixMRhsAssemble(double Mult, double *coeff, double *param,
                            double **OrigValues, int *N_BaseFuncts,
                            double ***LocMatrices, double **LocRhs);
 
+// Thivin 
+void MatrixMRhsAssembleSUPG(double Mult, double *coeff, double *param,
+                           double hK, 
+                           double **OrigValues, int *N_BaseFuncts,
+                           double ***LocMatrices, double **LocRhs);
+
 int N_Terms_MatrixMRhs_SUPG = 4;
 MultiIndex3D Derivatives_MatrixMRhs_SUPG[4] = { D100, D010, D001, D000 };
 int SpacesNumbers_MatrixMRhs_SUPG[4] = { 0, 0, 0, 0 };
@@ -146,9 +152,32 @@ void MatrixARhsAssembleNSEValues(double Mult, double *coeff, double *param,
                             double **OrigValues, int *N_BaseFuncts,
                             double ***LocMatrices, double **LocRhs);
 
+// Add Matrix with assembly routine
+void MatrixARhsAssembleNSEValuesSUPG(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs);
+
 
 // Add Matrix with assembly routine
 void MatrixARhsAssembleEulerianParticle(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs);
+
+
+void MatrixARhsAssembleEulerianParticle_x(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs);
+
+
+void MatrixARhsAssembleEulerianParticle_y(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs);
+
+void MatrixARhsAssembleEulerianParticle_z(double Mult, double *coeff, double *param,
                             double hK, 
                             double **OrigValues, int *N_BaseFuncts,
                             double ***LocMatrices, double **LocRhs);

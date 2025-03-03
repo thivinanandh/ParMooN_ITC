@@ -1,0 +1,137 @@
+Lets consider the Following example of Advection diffusion equation
+
+-eps(C_xx + C_yy) + u_l.grad(C) + grad(u_l).C = 0
+
+where C is the concentration of the species, u_l is the velocity field, eps is the diffusion coefficient. 
+
+
+Now fow this, the variational form (considering a test function as C) will be given as 
+
+\int_{\Omega} -eps(C_xx + C_yy) + u_l.grad(C) + grad(u_l).C dx = 0
+
+Now we can write the above equation in the following form
+
+\int_{\Omega} -eps(C_xx + C_yy)dx + \int_{\Omega} u_l.grad(C)dx + \int_{\Omega} grad(u_l).C dx = 0
+
+
+Here the terms C will be treated implicitly and the terms u_l will be treated explicitly (substituted directly in the equation).
+
+Pre-requisites:
+
+Auxparam: is an parameter list which is prefilled based on the user's request and sent into assembly. this generally has the values of the parameters which are required for the assembly of the matrix and the right hand side. Fo Example, in this case, i will have sued an aux param which sends [u_l(x) , u_l(x)/dx, u_l(y), u_l(y)/dy, u_l(x)/dy, u_l(y)/dx] as the auxparam.
+
+Coefficients: These are he bilinear co-efficients that are dependent at each quadrature point such as eps and forcing terms. these are filled in the function called bilinear params, which fills these values at the corresponding quadrature points. A set of quadrature points in given cell will be sent and will be filled in the below code
+
+Example Coefficient Funtino:
+``` void BilinearCoeffs(int n_points, double *X, double *Y, double *Z,
+               double **parameters, double **coeffs)
+{
+  int i;
+  double *coeff, alpha, sigma_a, sigma_s, spx, spy, spz;                                  // *param;
+  double x, y, z, c, a[3],s[3], h;
+  double expt;
+  
+
+  for(i=0;i<n_points;i++)
+  {
+    coeff = coeffs[i];
+    x = X[i];
+    y = Y[i];
+    z = Z[i];
+    // diffusion
+    coeff[0] = 1e-1;
+    // Advection values are infered from internal Fluid Velocity
+    // reaction
+    coeff[4] = 0.;
+    // External Forcing
+    coeff[5] = 0.;
+  }```
+
+
+Assembly logic in FEM:
+
+generally in FEM, the assembly is done using test functions. For Eg: for test function v, its written as summation of v_i * phi_i where v_i is the value of the test function at the ith node and phi_i is the basis function at the ith node. Similarly for the solution also its written as summation of u_i * phi_i.
+
+So for our above example, the assembly will be written as 
+``` 
+void MatrixARhsAssembleEulerianParticle(double Mult, double *coeff, double *param,
+                            double hK, 
+                            double **OrigValues, int *N_BaseFuncts,
+                            double ***LocMatrices, double **LocRhs)
+{
+  // cout << " TCD3D Assemble with NSE-3D values " << endl;
+  double **MatrixA, **MatrixK, *Rhs, val, *MatrixRowA, *MatrixRowK;
+  double ansatz000, ansatz100, ansatz010, ansatz001;
+  double test000, test100, test010, test001;
+  double *Orig0, *Orig1, *Orig2, *Orig3;
+  int i,j, N_;
+  double c0, c1, c2, c3, c4, c5, Pe; 
+
+  MatrixA = LocMatrices[0];
+  Rhs = LocRhs[0];
+
+  N_ = N_BaseFuncts[0];
+
+  Orig0 = OrigValues[0];
+  Orig1 = OrigValues[1];
+  Orig2 = OrigValues[2];
+  Orig3 = OrigValues[3];
+
+  c0 = coeff[0]; // eps
+  c4 = coeff[4]; // c
+  c5 = coeff[5]; // f
+
+
+  // These are advection values read from the NSE-3D values
+  // Here is the FeFunct Index and the MultiIndex Array 
+  // The FeFunct Index describes, which ffeunction value is taken at which index of Param Array
+  // The MultiIndex Array describes, which component of the function value is taken (like Which derivative)
+  // int NSFEFctIndexVelo[6] = { 0,0 , 1, 1, 2, 2} ;
+  // MultiIndex3D NSFEMultiIndexVelo[6] = { D000, D100, D000, D010, D000, D001} ;
+  double b_x = param[0];
+  double b_x_grad_x = param[1];
+  double b_y = param[2];
+  double b_y_grad_y = param[3];
+  double b_z = param[4];
+  double b_z_grad_z = param[5];
+
+  // b_x = 0.0;
+  // b_y = 1.0;
+  // b_z = 0.0;
+  // cout << " bx = " << b_x << " by = " << b_y << " bz = " << b_z << endl;
+  // cout << " bx_grad_x = " << b_x_grad_x << " by_grad_y = " << b_y_grad_y << " bz_grad_z = " << b_z_grad_z << endl;  
+  
+  for(i=0;i<N_;i++)
+  {
+    MatrixRowA = MatrixA[i];
+    test100 = Orig0[i];
+    test010 = Orig1[i];
+    test001 = Orig2[i];
+    test000 = Orig3[i];
+
+    Rhs[i] += Mult*test000*c5;
+
+    for(j=0;j<N_;j++)
+    {
+      ansatz100 = Orig0[j];
+      ansatz010 = Orig1[j];
+      ansatz001 = Orig2[j];
+      ansatz000 = Orig3[j];
+
+      // The Original equation was b.\grad(u) -> b_x * u_x + b_y * u_y + b_z * u_z
+      // The variational form will be (b_x * u_x + b_y * u_y + b_z * u_z) * v
+      // Now, the original form is b.\grad(u) + \grad(b).u -> b_x * u_x + b_y * u_y + b_z * u_z + (b_x * v_x + b_y * v_y + b_z * v_z) * u
+
+      val = c0*(test100*ansatz100+test010*ansatz010+test001*ansatz001);
+      val += (b_x*ansatz100+b_y*ansatz010+b_z*ansatz001)*test000;
+      val += (b_x_grad_x + b_y_grad_y + b_z_grad_z) * ansatz000 * test000;
+      // val += c4*ansatz000*test000;
+
+      MatrixRowA[j] += Mult * val;
+    } // endfor j
+  } // endfor i
+}
+```
+
+Here orig values are the test function values and the basis function values at the quadrature points. The coefficients are the bilinear coefficients that are filled at the quadrature points. The param is the auxparam that is sent to the assembly. The hK is the volume of the cell. The LocMatrices and LocRhs are the local matrices and the local right hand side that are filled in the assembly. The N_BaseFuncts is the number of basis functions in the cell. The Mult is the multiplier for quadrature weights.
+

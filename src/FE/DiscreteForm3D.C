@@ -3028,8 +3028,13 @@ void InitializeDiscreteFormsScalar(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, 
 
 
 // Intialize the discrete forms with NSE3D Assemble functions
-void InitializeDiscreteFormsScalarNSE(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin,
-                                      TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff)
+void InitializeDiscreteFormsScalarNSEWithSUPG(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, 
+                                                TDiscreteForm3D *&DiscreteFormARhs_Galerkin,
+                                                TDiscreteForm3D *&DiscreteFormRhs, 
+                                                TDiscreteForm3D *&DiscreteFormMRhs_SUPG, 
+                                                TDiscreteForm3D *&DiscreteFormARhs_SUPG,
+                                                TDiscreteForm3D *&DiscreteFormRhs_SUPG, 
+                                                CoeffFct3D *LinCoeff)
 {
         cout << " Calling correct function for Initialisation of Discrete forms " << endl;
         char MMString[] = "Mass matrix";
@@ -3045,31 +3050,98 @@ void InitializeDiscreteFormsScalarNSE(TDiscreteForm3D *&DiscreteFormMRhs_Galerki
                                                         RhsSpace_MatrixARhs, MatrixARhsAssembleNSEValues, LinCoeff, NULL);
 
         DiscreteFormRhs = new TDiscreteForm3D(MMString, MMString, N_Terms_Rhs, Derivatives_Rhs,
-                                              SpacesNumbers_Rhs, N_Matrices_Rhs, N_Rhs_Rhs,
-                                              RowSpace_Rhs, ColumnSpace_Rhs, RhsSpace_Rhs,
-                                              RhsAssemble, LinCoeff, NULL);
-}
+                                                        SpacesNumbers_Rhs, N_Matrices_Rhs, N_Rhs_Rhs,
+                                                        RowSpace_Rhs, ColumnSpace_Rhs, RhsSpace_Rhs,
+                                                        RhsAssemble, LinCoeff, NULL);
+        
+        DiscreteFormMRhs_SUPG = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixMRhs,
+                                                        Derivatives_MatrixMRhs, SpacesNumbers_MatrixMRhs, N_Matrices_MatrixMRhs, N_Rhs_MatrixMRhs,
+                                                        RowSpace_MatrixMRhs, ColumnSpace_MatrixMRhs, RhsSpace_MatrixMRhs,
+                                                        MatrixMRhsAssemble, LinCoeff, NULL);
 
-void InitializeDiscreteFormsEulerianDriftParticle(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin,
-                                                  TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff)
+        DiscreteFormARhs_SUPG = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                        Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                        N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                        RhsSpace_MatrixARhs, MatrixARhsAssembleNSEValues, LinCoeff, NULL);
+
+        DiscreteFormRhs_SUPG = new TDiscreteForm3D(MMString, MMString, N_Terms_Rhs, Derivatives_Rhs,
+                                                        SpacesNumbers_Rhs, N_Matrices_Rhs, N_Rhs_Rhs,
+                                                        RowSpace_Rhs, ColumnSpace_Rhs, RhsSpace_Rhs,
+                                                        RhsAssemble, LinCoeff, NULL);
+
+                }
+
+void InitializeDiscreteFormsEulerianDriftParticle(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, 
+                                                TDiscreteForm3D *&DiscreteFormARhs_Galerkin_x,TDiscreteForm3D *&DiscreteFormARhs_Galerkin_x_2, TDiscreteForm3D *&DiscreteFormARhs_Galerkin_x_3,
+                                                TDiscreteForm3D *&DiscreteFormARhs_Galerkin_y,TDiscreteForm3D *&DiscreteFormARhs_Galerkin_y_2, TDiscreteForm3D *&DiscreteFormARhs_Galerkin_y_3,
+                                                TDiscreteForm3D *&DiscreteFormARhs_Galerkin_z,TDiscreteForm3D *&DiscreteFormARhs_Galerkin_z_2, TDiscreteForm3D *&DiscreteFormARhs_Galerkin_z_3,
+                                                TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff)
 {
-        cout << " Calling correct function for Initialisation of Discrete forms " << endl;
+
         char MMString[] = "Mass matrix";
 
         DiscreteFormMRhs_Galerkin = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixMRhs,
                                                         Derivatives_MatrixMRhs, SpacesNumbers_MatrixMRhs, N_Matrices_MatrixMRhs, N_Rhs_MatrixMRhs,
                                                         RowSpace_MatrixMRhs, ColumnSpace_MatrixMRhs, RhsSpace_MatrixMRhs,
                                                         MatrixMRhsAssemble, LinCoeff, NULL);
-
-        DiscreteFormARhs_Galerkin = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+        // Treating the v term in v.grad(v) as implicit
+        DiscreteFormARhs_Galerkin_x = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
                                                         Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
                                                         N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
-                                                        RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle, LinCoeff, NULL);
+                                                        RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_x, LinCoeff, NULL);
+        
+        // Treating the gradv term in v.grad(v) as implicit
+        DiscreteFormARhs_Galerkin_x_2 = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                        Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                        N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                        RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_x, LinCoeff, NULL); 
+
+        // v'.grad(v') = v.grad(v') - v'.grad(v) + v.grad(v) - Here ' is the term treated explicitly
+        DiscreteFormARhs_Galerkin_x_3 = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                        Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                        N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                        RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_x, LinCoeff, NULL);  
+        
+         // Treating the v term in v.grad(v) as implicit
+        DiscreteFormARhs_Galerkin_y = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                        Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                        N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                        RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_y, LinCoeff, NULL);
+        
+        // Treating the gradv term in v.grad(v) as implicit
+        DiscreteFormARhs_Galerkin_y_2 = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_y, LinCoeff, NULL); 
+
+        // v'.grad(v') = v.grad(v') - v'.grad(v) + v.grad(v) - Here ' is the term treated explicitly
+        DiscreteFormARhs_Galerkin_y_3 = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_y, LinCoeff, NULL);  
+
+         // Treating the v term in v.grad(v) as implicit
+        DiscreteFormARhs_Galerkin_z = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_z, LinCoeff, NULL);
+        
+        // Treating the gradv term in v.grad(v) as implicit
+        DiscreteFormARhs_Galerkin_z_2 = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_z, LinCoeff, NULL); 
+
+        // v'.grad(v') = v.grad(v') - v'.grad(v) + v.grad(v) - Here ' is the term treated explicitly
+        DiscreteFormARhs_Galerkin_z_3 = new TDiscreteForm3D(MMString, MMString, N_Terms_MatrixARhs,
+                                                Derivatives_MatrixARhs, SpacesNumbers_MatrixARhs, N_Matrices_MatrixARhs,
+                                                N_Rhs_MatrixARhs, RowSpace_MatrixARhs, ColumnSpace_MatrixARhs,
+                                                RhsSpace_MatrixARhs, MatrixARhsAssembleEulerianParticle_z, LinCoeff, NULL);  
 
         DiscreteFormRhs = new TDiscreteForm3D(MMString, MMString, N_Terms_Rhs, Derivatives_Rhs,
-                                              SpacesNumbers_Rhs, N_Matrices_Rhs, N_Rhs_Rhs,
-                                              RowSpace_Rhs, ColumnSpace_Rhs, RhsSpace_Rhs,
-                                              RhsAssemble, LinCoeff, NULL);
+                                        SpacesNumbers_Rhs, N_Matrices_Rhs, N_Rhs_Rhs,
+                                        RowSpace_Rhs, ColumnSpace_Rhs, RhsSpace_Rhs,
+                                        RhsAssemble, LinCoeff, NULL);
 }
 
 void InitializeDiscreteFormRTE(TDiscreteForm3D *&DiscreteFormMBRhs_Galerkin, TDiscreteForm3D *&DiscreteFormRhs_Galerkin,

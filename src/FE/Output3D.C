@@ -2280,6 +2280,543 @@ int TOutput3D::WriteVtk(const char *name)
 }
 
 
+int TOutput3D::WriteVtkGradient(const char *name)
+{
+  int i,j,k,l,m,n,p;
+  int N_Cells, N_Vertices, N_CellVertices, N_Comps, MaxN_VerticesPerCell;
+  // *N_DOF, *N_Comp, *FESpaceNumber;
+  int  N_, N_Elements, N_LocVertices;
+  TVertex **Vertices, *Last, *Current;
+  TFEFunction3D *fefunction;
+  TFEVectFunct3D *fevectfunct;
+  int N_BaseFunct, N_DOF;
+  TVertex *vertex;
+  TBaseCell *cell;
+  double x[4], y[4], z[4];
+  int *FESpaceNumber;
+  TFESpace3D *fespace;
+  char *Comment;
+  double xi, eta, zeta;
+  double value;
+  double *Coeffs;
+  int N_LocDOF;
+  int Length, N_Comp;
+  double t;
+  
+  TBaseFunct3D *bf;
+  BaseFunct3D BaseFunct;
+  FE3D FE_ID;
+  double BFValues[3*MaxN_BaseFunctions3D]; // 3 for vector valued basis functions
+  double *FEValues;
+  int *GlobalNumbers, *BeginIndex, *Index, *DOF;
+  double *Coords;
+  int *VertexNumbers;
+  int *NumberVertex;
+  double LocValues[MaxN_BaseFunctions3D];
+  double s;
+  char str[15];
+  int *BaseFuncts;
+  int *IntArray;
+  double *DoubleArray;
+  // 12 - hexaedron
+  // 10 - tetra
+  const int CELL_TYPES_HEXA=12;
+  const int CELL_TYPES_TETRA=10;
+
+ // format (x_i, y_i, z_i)
+  static double HexaCoords[] =
+    { -1, -1, -1,
+       1, -1, -1,
+       1,  1, -1,
+      -1,  1, -1,
+      -1, -1,  1,  
+       1, -1,  1,
+       1,  1,  1,
+      -1,  1,  1 
+    };
+
+  // format (x_i, y_i, z_i)
+  static double TetraCoords[] =
+    { 0, 0, 0,
+      1, 0, 0,
+      0, 1, 0,
+      0, 0, 1 };
+
+
+  MaxN_VerticesPerCell = 8; // 3D case
+
+  std::ofstream dat(name);
+  if (!dat)
+  {
+    cerr << "cannot open file for output" << endl;
+    return -1;
+  }
+  dat.setf(std::ios::fixed);
+  dat << setprecision(4);
+
+  FESpaceNumber = new int[N_ScalarVar+N_VectorVar];
+
+  N_Comps = 0;
+  for(i=0;i<N_ScalarVar;i++)
+  {
+    N_Comps++;
+    fespace=FEFunctionArray[i]->GetFESpace3D();
+    j=0;
+    while(FESpaceArray[j]!=fespace) j++;
+    FESpaceNumber[i]=j;
+  }
+
+  k = N_ScalarVar;
+  for(i=0;i<N_VectorVar;i++,k++)
+  {
+    N_Comps += FEVectFunctArray[i]->GetN_Components();
+    fespace=FEVectFunctArray[i]->GetFESpace3D();
+    j=0;
+    while(FESpaceArray[j]!=fespace) j++;
+    FESpaceNumber[k]=j;
+  }
+
+  // determine data for vtk file
+
+  N_Elements=Coll->GetN_Cells();
+//   cout << "N_Elements: " <<  N_Elements << endl;
+  N_LocVertices=0;
+  for(i=0;i<N_Elements;i++)
+  {
+    cell = Coll->GetCell(i);
+    N_LocVertices += cell->GetN_Vertices();
+  }
+  Vertices=new TVertex*[N_LocVertices];
+  N_=0;
+  for(i=0;i<N_Elements;i++)
+  {
+    cell = Coll->GetCell(i);
+    k=cell->GetN_Vertices();
+    for(j=0;j<k;j++)
+    {
+      Vertices[N_]=cell->GetVertex(j);
+      N_++;
+    }
+  }
+  
+  // check for discontinuous scalar variables. In such a case write a new file
+  // for this variable. ParaView will really display a discontinuous function
+  // instead of projecting it onto P1/Q1 space.
+  // However there are some drawbacks. 
+  for(i = 0; i < N_ScalarVar; i++)
+  {
+    j = FEFunctionArray[i]->GetFESpace3D()->IsDGSpace();
+    if(j==1)
+    {
+      // draw all discontinuous functions not just this i-th one.
+      WriteVtkDiscontinuous(name,N_LocVertices,Vertices);
+      break;
+    }
+  }
+  
+//   cout << "N_" << N_ << endl;
+  Sort(Vertices, N_);
+  //Sort(cell_types, N_);
+  Last=NULL;
+  N_Vertices=0;
+  for(i=0;i<N_LocVertices;i++)
+    if((Current=Vertices[i])!=Last)
+    {
+      N_Vertices++;
+      Last=Current;
+    }
+  //cout << "N_Vertices: " << N_Vertices << endl;
+  Coords=new double[3*N_Vertices];
+  VertexNumbers=new int[N_LocVertices];
+  NumberVertex=new int[N_LocVertices];
+  Last=NULL;
+  N_=0; k=-1;
+  for(i=0;i<N_LocVertices;i++)
+  {
+    if((Current=Vertices[i])!=Last)
+    {
+      Vertices[i]->GetCoords(Coords[3*N_],Coords[3*N_+1], Coords[3*N_+2]);
+      k++;
+      N_++;
+      Last=Current;
+    }
+    NumberVertex[i]=k;
+  }
+  
+  m=0;
+  for(i=0;i<N_Elements;i++)
+    {
+    cell = Coll->GetCell(i);
+    k=cell->GetN_Vertices();
+    for(j=0;j<k;j++)
+    {
+      Current=cell->GetVertex(j);
+      // cout << (int)(Current) << endl;
+      l=GetIndex(Vertices, N_LocVertices, Current);
+      VertexNumbers[m]=NumberVertex[l];
+      //cout << "Vertex Number: " << VertexNumbers[m] << endl;
+      m++;
+    } // endfor j
+  } //endfor i
+
+ 
+
+
+  // one additional column for absolute values of velocity
+  N_Comps++;
+
+  // to check
+  //cout << "MaxN_VerticesPerCell*N_Comps" << MaxN_VerticesPerCell*N_Comps << endl;
+  //cout << "MaxN_VerticesPerCell" << MaxN_VerticesPerCell << endl;
+  //cout << "N_Comps" << N_Comps << endl;
+  
+  dat << std::scientific;
+  dat.precision(6);
+  dat << "# vtk DataFile Version 4.2" << endl;
+  dat << "file created by ParMooN" << endl;
+
+
+  dat << "ASCII" << endl;
+  dat << "DATASET UNSTRUCTURED_GRID" << endl << endl;
+  dat << "POINTS " << N_Vertices << " double" << endl;
+  N_=0;
+  //cout << "N_LocVertices: " << N_LocVertices << endl;
+  for(i=0;i<N_Vertices;i++)
+  {  
+    dat << Coords[N_] << " " <<  Coords[N_+1] << " " << Coords[N_+2] << endl;
+    N_ +=3;
+  }
+  dat << endl;
+  dat << "CELLS " << N_Elements << " " <<  N_Elements+N_LocVertices << endl;
+  l=0;
+  for(i=0;i<N_Elements;i++)
+  {
+    N_CellVertices=Coll->GetCell(i)->GetN_Vertices();
+    dat <<  N_CellVertices << " ";
+    for(j=0;j<N_CellVertices;j++)
+    {
+      dat << VertexNumbers[l] << " ";
+      l++;
+    }
+    dat << endl;
+  }
+  dat << endl;
+  dat << "CELL_TYPES " << N_Elements << endl;
+  for(i=0;i<N_Elements;i++)
+  {  
+    N_CellVertices=Coll->GetCell(i)->GetN_Vertices();
+    switch(N_CellVertices)
+    {
+    case 4: dat << 10 << " ";
+      break;
+    case 8: dat << 12 << " ";
+      break; 
+    }
+  }
+  dat << endl << endl;
+  dat << "POINT_DATA " << N_Vertices << endl;  
+
+  // function values
+  
+  DoubleArray = new double[3*N_Vertices];
+  IntArray = new int[N_Vertices];
+
+   // write scalar variables into file
+  for(k=0;k<N_ScalarVar;k++)
+  {
+    fespace = FEFunctionArray[k]->GetFESpace3D();
+    Coeffs = FEFunctionArray[k]->GetValues();
+    GlobalNumbers = fespace->GetGlobalNumbers();
+    BeginIndex = fespace->GetBeginIndex();
+
+    memset(DoubleArray, 0, SizeOfDouble*N_Vertices);
+    memset(IntArray, 0, SizeOfInt*N_Vertices);
+    m = 0;
+    
+    // will be set to true for vector valued basis functions (for example 
+    // Raviart-Thomas or Brezzi-Douglas-Marini)
+    bool VectOutput = false;
+      
+    for(i=0;i<N_Elements;i++)
+    {
+      cell = Coll->GetCell(i);
+      N_ = cell->GetN_Vertices();
+
+      // find FE data for this element
+      FE_ID = fespace->GetFE3D(i, cell);
+      bf = TFEDatabase3D::GetFE3D(FE_ID)->GetBaseFunct3D();
+      DOF = GlobalNumbers+BeginIndex[i];
+      N_LocDOF = bf->GetDimension();
+      int BaseVectDim = bf->GetBaseVectDim();
+      if(BaseVectDim == 3) 
+        VectOutput = true;
+      else if(BaseVectDim != 1)
+        ErrMsg("unkown number of basis function components, assume 1.");
+      for(j=0;j<N_;j++)
+      {
+        switch(cell->GetN_Vertices())
+        {
+	  //  Tetrahedron
+          case 4: 
+	    xi   = TetraCoords[3*j];
+            eta  = TetraCoords[3*j+1];
+            zeta = TetraCoords[3*j+2];
+	    break;
+	  // Hexahedron
+	  case 8: 
+            xi   = HexaCoords[3*j];
+            eta  = HexaCoords[3*j+1];
+            zeta = HexaCoords[3*j+2];
+	    break;
+        }
+        bf->GetDerivatives(D000, xi, eta, zeta, BFValues);
+        bf->ChangeBF(Coll, cell, BFValues);
+        if(!VectOutput)
+        {
+          value = 0;
+          for(l=0;l<N_LocDOF;l++)
+            value += BFValues[l] * Coeffs[DOF[l]];
+          DoubleArray[VertexNumbers[m]] += value;
+        }
+        else // VectOutput
+        {
+          // transform values using the Piola transform
+          RefTrans3D RefTrans = TFEDatabase3D::GetRefTrans3D_IDFromFE3D(FE_ID);
+          TRefTrans3D *F_K = TFEDatabase3D::GetRefTrans3D(RefTrans);
+          TFEDatabase3D::SetCellForRefTrans(cell, RefTrans);
+          double *BFValuesOrig = new double[3*N_LocDOF];
+          switch(RefTrans)
+          {
+            case TetraAffin:
+            case HexaAffin:
+              F_K->PiolaMapOrigFromRef(N_LocDOF, BFValues, BFValuesOrig);
+              break;
+            case HexaTrilinear:
+              ErrMsg("Piola transform for trilinear reference map not yet " << 
+                     "implemented");
+              break;
+            default:
+              ErrMsg("unknown reference transformation");
+              exit(0);
+              break;
+          }
+          
+          double value_x = 0, value_y = 0, value_z = 0;
+          for( l = 0; l < N_LocDOF; l++)
+          {
+            int face = TFEDatabase3D::GetFE3D(FE_ID)->GetFEDesc3D()
+                ->GetJointOfThisDOF(l);
+            int nsign = 1;
+            if(face != -1)
+              nsign = cell->GetNormalOrientation(face);
+            value_x += BFValuesOrig[l             ] * Coeffs[DOF[l]]*nsign;
+            value_y += BFValuesOrig[l +   N_LocDOF] * Coeffs[DOF[l]]*nsign;
+            value_z += BFValuesOrig[l + 2*N_LocDOF] * Coeffs[DOF[l]]*nsign;
+          }
+          DoubleArray[BaseVectDim*VertexNumbers[m] + 0] += value_x;
+          DoubleArray[BaseVectDim*VertexNumbers[m] + 1] += value_y;
+          DoubleArray[BaseVectDim*VertexNumbers[m] + 2] += value_z;
+          
+          delete [] BFValuesOrig;
+        }
+        IntArray[VertexNumbers[m]]++;
+        m++;
+      } // endfor j
+    } // endfor i
+
+    if(!VectOutput)
+    {
+      // non conforming
+      for(i=0;i<N_Vertices;i++)
+        DoubleArray[i] /= IntArray[i];
+    }
+    else // VectOutput
+    {
+      for(i = 0; i < N_Vertices; i++)
+      {
+        DoubleArray[3*i    ] /= IntArray[i];
+        DoubleArray[3*i + 1] /= IntArray[i];
+        DoubleArray[3*i + 2] /= IntArray[i];
+      }
+    }
+
+    if(!VectOutput)
+    {
+      dat << "SCALARS " << FEFunctionArray[k]->GetName();
+      dat << " double"<< endl;
+      dat << "LOOKUP_TABLE " << "default" << endl;
+      for(j=0;j<N_Vertices;j++)
+        dat << DoubleArray[j] << endl;
+      dat << endl;
+      dat << endl;
+    }
+    else
+    {
+      // vector output, we don't write each component individually, 
+      dat << "VECTORS " << FEFunctionArray[k]->GetName() << " double\n";
+      for(i = 0; i < N_Vertices; i++)
+      {
+        for(j = 0; j < 3; j++)
+        {
+          dat << DoubleArray[3 * i + j] << " ";
+        }
+        dat << endl;
+      }
+      dat << endl;
+      // reset
+      VectOutput = false;
+    }
+  } // endfor k
+
+ 
+  for(k=0;k<N_VectorVar;k++)
+  {
+    fespace = FEVectFunctArray[k]->GetFESpace3D();
+    N_Comp = FEVectFunctArray[k]->GetN_Components();
+    Length = FEVectFunctArray[k]->GetLength();
+    Coeffs = FEVectFunctArray[k]->GetValues();
+    GlobalNumbers = fespace->GetGlobalNumbers();
+    BeginIndex = fespace->GetBeginIndex();
+    
+    memset(DoubleArray, 0, SizeOfDouble*N_Vertices*N_Comp);
+    memset(IntArray, 0, SizeOfInt*N_Vertices);
+    m = 0;
+
+    
+    //for(k=0;k<FEVectFunctArray[i]->GetN_Components();k++)
+    //{
+      
+    for(i=0;i<N_Elements;i++)
+    {
+      cell = Coll->GetCell(i);
+      N_ = cell->GetN_Vertices();
+
+      // find FE data for this element
+      FE_ID = fespace->GetFE3D(i, cell);
+      bf = TFEDatabase3D::GetFE3D(FE_ID)->GetBaseFunct3D();
+      DOF = GlobalNumbers+BeginIndex[i];
+      N_LocDOF = bf->GetDimension();
+      for(j=0;j<N_;j++)
+      {
+        switch(cell->GetN_Vertices())
+        {
+          case 4: 
+	    xi   = TetraCoords[3*j];
+            eta  = TetraCoords[3*j+1];
+            zeta = TetraCoords[3*j+2];
+	    break;
+
+	  case 8: 
+	    xi   = HexaCoords[3*j];
+            eta  = HexaCoords[3*j+1];
+            zeta = HexaCoords[3*j+2];
+	    break;
+        }
+        bf->GetDerivatives(D000, xi, eta, zeta, BFValues);
+        bf->ChangeBF(Coll, cell, BFValues);
+       
+	for(n=0;n<N_Comp;n++)
+        {
+	  value = 0;
+	  for(l=0;l<N_LocDOF;l++)
+	    value += BFValues[l] * Coeffs[DOF[l]+n*Length];
+	  DoubleArray[N_Comp*VertexNumbers[m] + n] += value;
+	} 
+        IntArray[VertexNumbers[m]]++;
+        m++;
+      } // endfor j
+    } // endfor i
+
+    // midle value
+
+    l = 0;
+    for(i=0;i<N_Vertices;i++)
+    {
+      for(j=0;j<N_Comp;j++)
+      {
+        DoubleArray[l] /= IntArray[i];
+	l++;
+      }
+    } // endfor l
+    /*
+    for(i=0;i<2*N_Vertices;i++)
+    {
+      cout << "Do[" << i << "]" << DoubleArray[i] << endl;
+    }
+    */
+    
+    for(j=0;j<N_Comp;j++)
+    {
+      dat << "SCALARS " << FEVectFunctArray[k]->GetName() << j;
+      dat << " double"<< endl;
+      dat << "LOOKUP_TABLE " << "default" << endl;
+      for(i=0;i<N_Vertices;i++)
+      {
+	dat << DoubleArray[i*N_Comp+j] << endl;
+      }
+      dat << endl << endl;
+    }
+    
+    dat << "SCALARS " << "|" << FEVectFunctArray[k]->GetName() << "|";
+    dat << " double"<< endl;
+    dat << "LOOKUP_TABLE " << "default" << endl;
+    l=0;
+    for(i=0;i<N_Vertices;i++)
+    {
+      t=0;
+      for(j=0;j<N_Comp;j++)
+      {	
+       t+=DoubleArray[l]*DoubleArray[l];
+       l++;
+      }
+      dat << sqrt(t)<< endl;
+    }
+    dat << endl << endl;
+
+    dat << "VECTORS " << FEVectFunctArray[k]->GetName();
+    dat << " double"<< endl;
+    
+    l=0;
+    for(i=0;i<N_Vertices;i++)
+    {
+      for(j=0;j<N_Comp;j++)
+      {
+	dat << DoubleArray[N_Comp*i+j] << " ";
+      }
+      dat << endl;
+    }
+    dat << endl;
+  } // endfor k
+
+     
+    // write the RegionID
+    dat << endl;
+    dat <<  "CELL_DATA "<< N_Elements<<endl;
+    dat <<  "SCALARS RegionID int  1"<<endl;
+    dat <<  "LOOKUP_TABLE default  "<<endl;
+#ifdef _MPI    
+    for(i=0;i<N_Elements;i++)     
+      dat << (Coll->GetCell(i))->GetSubDomainNo()<<endl;
+#endif    
+     for(i=0;i<N_Elements;i++)
+      dat << (Coll->GetCell(i))->GetRegionID() <<endl;      
+    
+  dat.close();
+  
+  delete [] IntArray;
+  delete [] DoubleArray;
+  delete [] NumberVertex;
+  delete [] VertexNumbers;
+  delete [] Vertices;
+  delete [] Coords;
+  delete [] FESpaceNumber;
+
+  OutPut("wrote output into vtk file: " << name << endl);
+  return 0;
+}
+
+
+
 /*
   Ulrich Wilbrandt, December 2013.
 

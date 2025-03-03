@@ -62,11 +62,16 @@ class TSystemDriftVelocity3D : public TSystemCD3D
     /** constructor */
      TSystemDriftVelocity3D(int N_levels, TFESpace3D **fespaces, double **sol, double **rhs, int disctype, int solver);
 
+    
+
     /** destrcutor */
     ~TSystemDriftVelocity3D();
 
     /** methods */
     void Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue, TAuxParam3D *aux);
+
+    /** Add Init for Seperate_Co-ordinates */
+    void Init(CoeffFct3D *BilinearCoeffs, BoundCondFunct3D *BoundCond, BoundValueFunct3D *BoundValue, TAuxParam3D *aux, int component, int type);
 
     // Values
     TFEVectFunct3D **m_fevect_drift_array; // Stores the drift velocity array

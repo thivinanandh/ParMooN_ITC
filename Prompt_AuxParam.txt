@@ -1,0 +1,268 @@
+Aux Parameters:
+===============
+
+Aux parameters are used to send the explicit terms into the system matrix assembly. It uses multiple aprameters. 
+
+
+Rerequisites:
+1, Fespaces: The collection of test function and derrivatives for a selected finite element order space.. For example, for velocity if we choose Q2 element, then FEspace will contain shape function information of all cells corresponding to Q2.. it will also contain the boundary condition and mesh related information such as cell colleciton, edges, points etc. 
+
+2, FeFunction:
+Fefunction is a wrapper to an solution or any array, which performs FEM interpolation. For Eg: in FEEM after discretising all the solution points will be discretely saved as an array. but if we need a solution to be interpolated at a given point, then fefunction( which is assosiated with an fespace) will perform this interpolation and returns back the values. This is used for assembly routines
+
+3, FeVectFunction
+FeVectFunciton is a a wrapper on fefunciton for vecorvalued soltuions. For Eg: in NSE, u is vector with  3 components in 3D..so the solution array will be of size (N_DOF x 3), which  is used for storing velocity in all 3 components [component1 for n_dof followed by  computent2 for ndof followed by component 3 for ndof]. fevectfunction serves as a wrapper which will have 3 fefunction object assosiated with different components 
+
+
+Parameters:
+int n_fespace3d, int n_fefunction3d, int n_paramfct,
+int n_fevalues,
+TFESpace3D **fespaces3d, TFEFunction3D **fefunctions3d,
+ParamFct **parameterfct,
+int *fevalue_fctindex, MultiIndex3D *fevalue_multiindex,
+int n_parameters, int *beginparameter
+
+
+Scenario:
+For Eg: if i have two vector variables u and v, and i need values and derivatives..which is u1, u2, u3 , du1/dx, du2/dy, du3/dz and v1, v2, v3 and dv1
+
+Explanation:
+
+1. n_fespace3d : says number of finite element spaces involved. In case of soliving NSE, we have two different functional spaces, and these functional spaces will be 2.in this case the number of fespaces are 2, since there are 2 fespaces asssoated with u and v
+
+2. n_fefunction3d: number of fefuntion3d to be used in this assembly routine. In this case, the number of fefunctions is 6, since i need 3 for u1, u2, u3 and three for v1, v2, v3
+
+3. n_paramfct: Number of param functions (this is generally 1)
+
+
+4. n_fevalues: this requires the number of terms needed inside the params..
+I need 12 values from this (3 valeus and 3 derivativces for u, 3 values and 3 derivaives for v)
+
+
+5. Fespaces: Double pointer array which will hold the corresponding finite element spaces to the needed fe values..
+Here the fespaces array will have [fespaceU, fespaceV]
+
+6. fefunctions: Pointers to the fefunctions for the corresponding values needed. 
+Here the array will be 6 pointers (fefunctinonU1, fefunctionU2, fefucntionU3, fefunctionV1, FefunctionV2, FefunctionV3)
+
+7, paramFunction: poiinters to param functions. The param function is a function, which rearranges the aux values. For Eg: the param function by default compuptes the x, y and z xoorfidinates and appends it to the aux array ( first three positions.) depending on our need we can either use or discard this value. For Eg:: lets say you need u1,u2, u3..
+
+the aux will assemble [x,y,z,u1,u2,u3]. however the param functoin will be like
+
+void func(*in, *out){
+	out[0] = in[2]
+	out[1] = in[3]
+	out[2] = in[4]
+}
+
+8, fevalie_fct index: the fefunction index from the fefunction pointer array for the values. 
+
+For Eg: in this csae, i need my aux array to be [u1,u2,u3,du1/dx, du2/dx, du3/dx, v1,v2,v3, dv1/dx, dv2/dx, dv3/dx]. So my fefunction index will be [0,1,2,0,1,2,3,4,5,3,4,5]
+
+9, fevalue_multiindex: The multiindex of the values needed. D000 for values and D100 for x-derivative, D010 for y-derivative and D001 for z-derivative. So in this case the multiindex will be [D000, D000, D000, D100, D100, D100, D000, D000, D000, D100, D100, D100]
+
+10, n_parameters: number of parameters needed. In this case, i need 3 parameters (x,y,z). however as per the Aux param code, this value is not used. 
+
+11, beginparameter: the index of the parameters in the aux array. this is used to displace the aux array for different values. since we need all the values in the aux array, we will start the index from 0.
+
+
+Example 2:
+==========
+
+In this case, i need to assemble the term u_l.grad(C) + grad(u_l).C. Here u_l is the velocity and C is the concentration. So I need to treat the u_l term explicitly Since its known.. So expanding the term u_l term vectorialy, i get
+
+u_l = {u_l(x), u_l(y), u_l(z)}
+u_l(x) * grad(C) + u_l(y) * grad(C) + u_l(z) * grad(C) + grad(u_l(x)) * C + grad(u_l(y)) * C + grad(u_l(z)) * C
+
+So in this case, i need the values of u_l and its derivatives . So the aux array will be [u_l(x), u_l(y), u_l(z), du_l(x)/dx, du_l(y)/dy, du_l(z)/dz]. here C will be assembled inside the system matrix assembly routine.
+
+So the aux parameters will be
+``` // Set up the aux to pass the velocity field
+  TFESpace3D *fesp_aux[1];
+  fesp_aux[0] = fespace_b;
+  int NSBeginParamVelo[1] = {0};
+  // Here there are 3 fe functions, one for each component of the velocity field
+  // So for each component, we need Values, Derivative_x, Derivative_y, Derivative_z
+  // WE need an array of 6 values, the order in which these values will be passed is given by the NSFEFctIndexVelo
+  // Here it says first 2 values are for the first component, next 2 for the second and last 2 for the third
+  int NSFEFctIndexVelo[6] = {0, 0, 1, 1, 2, 2};
+  // Now, we need to specicify what are the values that need to be passed
+  // Is it the actual values, or the derivative in x, y or z
+  MultiIndex3D NSFEMultiIndexVelo[6] = {D000, D100, D000, D010, D000, D001};
+  // This means, the values will be passed as
+  // [ b_x, d(b_x)/dx, b_y, d(b_y)/dy, b_z, d(b_z)/dz ]
+  ParamFct *NSFctVelo[1] = {b_params_velo};
+
+  // This array is the placeholder for the particle velocity function
+  // This pointer will be updated every timestep after solving for drift velocity
+  TFEFunction3D *fefunct_particle_velocity_placeholder[3];
+  fefunct_particle_velocity_placeholder[0] = fevect_particle_array[0]->GetComponent(0);
+  fefunct_particle_velocity_placeholder[1] = fevect_particle_array[0]->GetComponent(1);
+  fefunct_particle_velocity_placeholder[2] = fevect_particle_array[0]->GetComponent(2);
+
+  // setup aux
+  aux = new TAuxParam3D(1, 3, 1, 6, fesp_aux, fefunct_particle_velocity_placeholder, NSFctVelo, NSFEFctIndexVelo, NSFEMultiIndexVelo, 3, NSBeginParamVelo);
+```
+
+
+Code for Aux Parameters:
+``` 
+#include <AuxParam3D.h>
+#include <FEDatabase3D.h>
+#include <stdlib.h>
+
+/** constructor */
+TAuxParam3D::TAuxParam3D(
+        int n_fespace3d, int n_fefunction3d, int n_paramfct,
+        int n_fevalues,
+        TFESpace3D **fespaces3d, TFEFunction3D **fefunctions3d,
+        ParamFct **parameterfct,
+        int *fevalue_fctindex, MultiIndex3D *fevalue_multiindex,
+        int n_parameters, int *beginparameter)
+{
+  N_FESpace3D = n_fespace3d;
+  N_FEFunction3D = n_fefunction3d;
+  N_ParamFct = n_paramfct;
+  N_FEValues = n_fevalues;
+
+  FESpaces3D = fespaces3d;
+  FEFunctions3D = fefunctions3d;
+  ParameterFct = parameterfct;
+
+  FEValue_FctIndex = fevalue_fctindex;
+  FEValue_MultiIndex = fevalue_multiindex;
+
+  N_Parameters = n_parameters;
+  BeginParameter = beginparameter;
+
+  Temp = new double[3 + N_FEValues];
+
+  Values = new double* [N_FEValues];
+  OrigValues = new double** [N_FEValues];
+  Index = new int* [N_FEValues];
+  N_BaseFunct = new int[N_FEValues];
+}
+
+
+/** set aux parameters giving a keyword*/
+TAuxParam3D::TAuxParam3D(std::string name, TFEFunction3D **fefunctions3d)
+{
+  if(name=="Velocity") // for Navier-Stokes
+  {
+    N_FESpace3D = 0;
+    FESpaces3D = NULL;
+    
+    N_FEFunction3D = 3;
+    FEFunctions3D = fefunctions3d;
+    
+    N_ParamFct = 1;
+    N_FEValues = 3;
+    
+    //see TNSE3D_FixPo.C
+    ParameterFct=new ParamFct*[1];
+    ParameterFct[0] = &Velocity_Fct; // see below in this file
+    FEValue_FctIndex =new int[3];
+    FEValue_FctIndex[0] = 0;
+    FEValue_FctIndex[1] = 1;
+    FEValue_FctIndex[2] = 2;
+    
+    FEValue_MultiIndex=new MultiIndex3D[3];
+    FEValue_MultiIndex[0]= D000;
+    FEValue_MultiIndex[1]= D000;
+    FEValue_MultiIndex[2]= D000;    
+    
+    N_Parameters = 3;
+    BeginParameter =new int[1];
+    BeginParameter[0]=0;
+    
+  }
+  else
+  {
+    ErrMsg(" AuxParam3D:: Constructor: ERROR, name " << name 
+           << " for initialization not imlpemented ");
+    exit(1);
+  }
+  
+  Temp = new double[3 + N_FEValues];
+
+  Values = new double* [N_FEValues];
+  OrigValues = new double** [N_FEValues];
+  Index = new int* [N_FEValues];
+  N_BaseFunct = new int[N_FEValues];
+}
+
+
+
+void TAuxParam3D::GetParameters(int N_Points, TBaseCell *cell, int cellnum,
+                              double *Xi, double *Eta, double *Zeta,
+                              double *X, double *Y, double *Z,
+                              double **Parameters)
+{
+  int i, j, k, l, n;
+  double xi, *param, *currparam, s;
+  double *locvalues;
+  TFESpace3D *fespace;
+  TFEFunction3D *fefunction;
+  FE3D FE_Id;
+  BaseFunct3D BaseFunct_Id;
+  int *GlobalNumbers, *BeginIndex;
+
+  double *CurrValues, *CurrOrigValues;
+  int *CurrIndex;
+
+   // collect information
+  for(j=0;j<N_FEValues;j++)
+  {
+    fefunction = FEFunctions3D[FEValue_FctIndex[j]];
+    Values[j] = fefunction->GetValues();
+
+    fespace = fefunction->GetFESpace3D();
+    FE_Id = fespace->GetFE3D(cellnum, cell);
+    BaseFunct_Id = TFEDatabase3D::GetFE3D(FE_Id)->GetBaseFunct3D_ID();
+
+    N_BaseFunct[j]=TFEDatabase3D::GetBaseFunct3D(BaseFunct_Id)->GetDimension();
+    OrigValues[j] = TFEDatabase3D::GetOrigElementValues
+	(BaseFunct_Id, FEValue_MultiIndex[j]);
+
+    GlobalNumbers = fespace->GetGlobalNumbers();
+    BeginIndex = fespace->GetBeginIndex();
+    Index[j] = GlobalNumbers + BeginIndex[cellnum];
+  } // endfor j
+
+
+  // loop over all quadrature points
+  for(i=0;i<N_Points;i++)
+  {
+    // parameters in this quadrature point  
+    param = Parameters[i];
+    // first three parameters are the coordinates
+    Temp[0] = X[i];
+    Temp[1] = Y[i];
+    Temp[2] = Z[i];
+
+    // loop to calculate all FE values
+    for(k=3,j=0;j<N_FEValues;j++,k++)
+    {
+      s = 0;
+      n = N_BaseFunct[j];
+      CurrValues = Values[j];
+      CurrOrigValues = OrigValues[j][i];
+      CurrIndex = Index[j];
+      for(l=0;l<n;l++)
+        s += CurrValues[CurrIndex[l]]*CurrOrigValues[l];
+      Temp[k] = s;
+    }  // endfor j
+
+    // loop to calculate all parameters
+    for(j=0;j<N_ParamFct;j++)
+    {
+      currparam = param + BeginParameter[j];
+      
+      /// change for twophase
+      currparam[0] = cell->GetRegionID();
+      
+      ParameterFct[j](Temp, currparam);
+    } // endfor j
+  } // endfor i
+}
+```

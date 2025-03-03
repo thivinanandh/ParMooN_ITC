@@ -48,8 +48,13 @@ set(AParMooN_MPI_IMPLEMENTATION "INTELMPI" CACHE STRING "select the MPI Implemen
 # set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/CD3D" CACHE STRING "select the model")
 # set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/TCD3D" CACHE STRING "select the model")
 # set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/NSE3D" CACHE STRING "select the model")
+# set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/NSE3D_Test" CACHE STRING "select the model")
+
 # set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/TNSE3D" CACHE STRING "select the model")
 set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/Siminhale_PBE_aerosolved" CACHE STRING "select the model")
+# set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/Siminhale_PBE_aerosolved" CACHE STRING "select the model")
+# set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/Siminhale_PBE_aerosolved_implicit" CACHE STRING "select the model")
+
 # set(AParMooN_OUTPUT_DIR_PATH "${CMAKE_SOURCE_DIR}/../ParMooN_Output/NSE3D" CACHE STRING "select the model")
 
 set(USE_PARMOON_DEFINE -D__PRIVATE_)

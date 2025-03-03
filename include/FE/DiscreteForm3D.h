@@ -228,11 +228,19 @@ void InitializeDiscreteFormsScalar(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, 
                                    TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff);
 
 // INitialize the discrete form for the Scalar problems with NSE
-void InitializeDiscreteFormsScalarNSE(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin, 
-                                   TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff);
+void InitializeDiscreteFormsScalarNSEWithSUPG(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, 
+                                              TDiscreteForm3D *&DiscreteFormARhs_Galerkin, 
+                                              TDiscreteForm3D *&DiscreteFormRhs, 
+                                              TDiscreteForm3D *&DiscreteFormMRhs_SUPG, 
+                                              TDiscreteForm3D *&DiscreteFormARhs_SUPG, 
+                                              TDiscreteForm3D *&DiscreteFormRhs_SUPG, 
+                                              CoeffFct3D *LinCoeff);
 
-void InitializeDiscreteFormsEulerianDriftParticle(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, TDiscreteForm3D *&DiscreteFormARhs_Galerkin, 
-                                   TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff);
+void InitializeDiscreteFormsEulerianDriftParticle(TDiscreteForm3D *&DiscreteFormMRhs_Galerkin, 
+                                                TDiscreteForm3D *&DiscreteFormARhs_Galerkin_x,TDiscreteForm3D *&DiscreteFormARhs_Galerkin_x_2, TDiscreteForm3D *&DiscreteFormARhs_Galerkin_x_3,
+                                                TDiscreteForm3D *&DiscreteFormARhs_Galerkin_y,TDiscreteForm3D *&DiscreteFormARhs_Galerkin_y_2, TDiscreteForm3D *&DiscreteFormARhs_Galerkin_y_3,
+                                                TDiscreteForm3D *&DiscreteFormARhs_Galerkin_z,TDiscreteForm3D *&DiscreteFormARhs_Galerkin_z_2, TDiscreteForm3D *&DiscreteFormARhs_Galerkin_z_3,
+                                                TDiscreteForm3D *&DiscreteFormRhs, CoeffFct3D *LinCoeff);
 
 void InitializeDiscreteFormGrid(TDiscreteForm3D *&DiscreteFormGrid, CoeffFct3D *GridCoeffs);
 

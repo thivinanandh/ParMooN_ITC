@@ -11,7 +11,7 @@ static void C_Q_Q1_2D_Funct(double xi, double eta, double *values)
   values[3]=0.25*(1+xi+eta+xi*eta);
 }
 
-// values of the derivatives in xi direction
+// values of the derivatives in xi direction`
 static void C_Q_Q1_2D_DeriveXi(double xi, double eta, double *values)
 {
   values[0]=0.25*(-1+eta);
@@ -55,7 +55,6 @@ static void C_Q_Q1_2D_DeriveEtaEta(double xi, double eta, double *values)
 
 
 // ***********************************************************************
-
 TBaseFunct2D *BF_C_Q_Q1_2D_Obj = new TBaseFunct2D
         (4, BF_C_Q_Q1_2D, BFUnitSquare, 
          C_Q_Q1_2D_Funct, C_Q_Q1_2D_DeriveXi,

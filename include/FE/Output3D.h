@@ -132,6 +132,9 @@ class TOutput3D
 
     /** write stored data into an vtk file */
     int WriteVtk(const char *name);
+
+    /** write stored data into an vtk file */
+    int WriteVtkGradient(const char *name);
     
      /** write a discontinuous function into a VTK file */
     void WriteVtkDiscontinuous(const char *fileName, 

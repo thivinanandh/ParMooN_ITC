@@ -106,6 +106,14 @@ void b_params_velo(double *in, double *out)
   out[2] = in[5]; // b3
 }
 
+// Used for Error Calculation (Aux)
+void NSParamsVelo3D_t(double *in, double *out)
+{
+      out[0] = in[3]; // u1old
+      out[1] = in[4]; // u2old  
+      out[2] = in[5]; // u3old  
+}
+
 int main(int argc, char *argv[])
 {
   // ======================================================================
@@ -556,6 +564,61 @@ int main(int argc, char *argv[])
   // Write the VTK file
   Output_Velo->WriteVtk(VeloVTKBaseName);
 
+  // ============================================================================================================= //
+  // --- CALCULATE L2 and H1 Semi Norms of the velocity field to check that the correct values are being read --- //
+  // =============================================================================================================// 
+
+  int t_NSN_FESpacesVelo = 1;
+  int t_NSN_FctVelo = 3;
+  int t_NSN_ParamFctVelo = 1;
+  int t_NSN_FEValuesVelo = 3;
+  int t_NSN_ParamsVelo = 3;
+  int t_NSFEFctIndexVelo[3] = { 0, 1, 2 };
+  MultiIndex3D t_NSFEMultiIndexVelo[3] = { D000, D000, D000 };
+  ParamFct *t_NSFctVelo[1] = { NSParamsVelo3D_t };
+  int t_NSBeginParamVelo[1] = { 0 };
+
+  MultiIndex3D t_NSAllDerivatives[4] = { D000, D100, D010, D001 };
+
+  TFESpace3D *t_fesp[4];
+  // Assign the fesp 
+  t_fesp[0] = fespace_b; // velocity
+  t_fesp[1] = fespace_b; // velocity ( Should )
+
+  TFEFunction3D *t_fefct[3];
+  t_fefct[0] = fevect_b->GetComponent(0);
+  t_fefct[1] = fevect_b->GetComponent(1);
+  t_fefct[2] = fevect_b->GetComponent(2);
+
+
+
+  // Setup the Aux Param
+  TAuxParam3D *NSE_Error_Aux = new TAuxParam3D(t_NSN_FESpacesVelo, t_NSN_FctVelo, t_NSN_ParamFctVelo, t_NSN_FEValuesVelo,
+                                                 t_fesp, t_fefct, t_NSFctVelo, t_NSFEFctIndexVelo, t_NSFEMultiIndexVelo,
+                                                 t_NSN_ParamsVelo, t_NSBeginParamVelo);
+
+  double errors_nse[4];
+
+  fefunct_b_array[0]->GetErrors(ExactU1, 4, t_NSAllDerivatives, 2, L2H1Errors, NULL, NSE_Error_Aux, 1, t_fesp, errors_nse);
+
+  double error_u1_l2 = errors_nse[0];
+  double error_u1_h1 = errors_nse[1];
+
+  fevect_b->GetComponent(1)->GetErrors(ExactU2, 4, t_NSAllDerivatives, 2, L2H1Errors, NULL, NSE_Error_Aux, 1, t_fesp, errors_nse);
+
+  double error_u2_l2 = errors_nse[0];
+  double error_u2_h1 = errors_nse[1];
+
+  fevect_b->GetComponent(2)->GetErrors(ExactU3, 4, t_NSAllDerivatives, 2, L2H1Errors, NULL, NSE_Error_Aux, 1, t_fesp, errors_nse);
+  
+  double error_u3_l2 = errors_nse[0];
+  double error_u3_h1 = errors_nse[1];
+
+  cout << "L2 Error for U1 : " << error_u1_l2 << " H1 Error for U1 : " << error_u1_h1 << endl;
+  cout << "L2 Error for U2 : " << error_u2_l2 << " H1 Error for U2 : " << error_u2_h1 << endl;
+  cout << "L2 Error for U3 : " << error_u3_l2 << " H1 Error for U3 : " << error_u3_h1 << endl;
+
+  
   // ==========================================================================================================
   // Setting up, Drift velocities for each of the internal co-ordinates
   // ===========================================================================================================
@@ -597,20 +660,23 @@ int main(int argc, char *argv[])
     fevect_drift_array[i] = new TFEVectFunct3D(fespace_drift, name_drift, name_drift, drift_velocity_array[i], n_size_u, 3);
     fevect_particle_array[i] = new TFEVectFunct3D(fespace_drift, name_particle, name_particle, particle_velocity_array[i], n_size_u, 3);
 
-    // Interpolate the Drift Velocity
+    // Interpolate the Drift Velocity, This puts the value of Drift velocity to be set as zero in the boundaries. 
     fevect_drift_array[i]->GetComponent(0)->Interpolate(Exact_DriftBoundaryValues);
     fevect_drift_array[i]->GetComponent(1)->Interpolate(Exact_DriftBoundaryValues);
     fevect_drift_array[i]->GetComponent(2)->Interpolate(Exact_DriftBoundaryValues);
 
+    // Copy the intial drift velocity to be equivalent to the velocity values of the fluid
+    memcpy(drift_velocity_array[i], u_fluid, sizeof(double) * 3 * n_size_u);
   }
 
   // Create an output object to visualise the drift velocity
-  char *DriftVeloVTKBaseName = "Drift_Velocity";
-  TOutput3D *Output_Drift = new TOutput3D(2, 2, N_InternalPts, 1, Domain);
+  char *DriftVeloVTKBaseName = "Particle_Velocity_Array";
+  TOutput3D *Output_Drift = new TOutput3D(2, 6, N_InternalPts*2, 1, Domain);
 
   // Add the Drift velocity FeVect Function for each internal level to the output
   for (int i = 0; i < N_InternalPts; i++)
   {
+    Output_Drift->AddFEVectFunct(fevect_particle_array[i]);
     Output_Drift->AddFEVectFunct(fevect_drift_array[i]);
   }
 
@@ -648,7 +714,7 @@ int main(int argc, char *argv[])
   fefunct_particle_velocity_placeholder[2] = fevect_particle_array[0]->GetComponent(2);
 
   // setup aux
-  aux = new TAuxParam3D(1, 3, 1, 3, fesp_aux, fefunct_particle_velocity_placeholder, NSFctVelo, NSFEFctIndexVelo, NSFEMultiIndexVelo, 3, NSBeginParamVelo);
+  aux = new TAuxParam3D(1, 3, 1, 6, fesp_aux, fefunct_particle_velocity_placeholder, NSFctVelo, NSFEFctIndexVelo, NSFEMultiIndexVelo, 3, NSBeginParamVelo);
 
   // Set the FEFunction as 1st internal point to the placeholder
   aux->SetFEFunctions(fefunct_particle_velocity_placeholder);
@@ -712,7 +778,7 @@ int main(int argc, char *argv[])
   // timestep is neede to assemble, so set time parameters
   SetTimeDiscParameters(1);
   // System_Space->AssembleIntlMat();
-  UpdateStiffnessMat = FALSE; // check BilinearCoeffs in example file
+  UpdateStiffnessMat = TRUE; // check BilinearCoeffs in example file
   bool UpdateRhs = TRUE;      // check BilinearCoeffs in example file
   ConvectionFirstTime = TRUE;
 
@@ -765,18 +831,18 @@ int main(int argc, char *argv[])
 
         // Measure time taken to solve the drift velocity
         auto start = std::chrono::high_resolution_clock::now();
-        SystemMatrix->SolveDriftVelocity(tau, i,  fevect_b, fevect_particle_array[i], particle_velocity_array[i], u_fluid);
+        SystemMatrix->SolveDriftVelocity(tau, i,  fevect_drift_array[i], fevect_particle_array[i], fevect_b, 1);
         auto stop = std::chrono::high_resolution_clock::now();
 
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-        cout << "Time taken to solve Drift Velocity: " << duration.count() << " ms" << endl;
+        cout << "   - Time taken to solve Drift Velocity: " << duration.count() << " ms" << endl;
 
 
         // cout << "Solved for Drift Velocity" << endl;
         // Setup the Drift velocity aux array to point to current internal level
-        fefunct_particle_velocity_placeholder[0] = fevect_drift_array[i]->GetComponent(0);
-        fefunct_particle_velocity_placeholder[1] = fevect_drift_array[i]->GetComponent(1);
-        fefunct_particle_velocity_placeholder[2] = fevect_drift_array[i]->GetComponent(2);
+        fefunct_particle_velocity_placeholder[0] = fevect_particle_array[i]->GetComponent(0);
+        fefunct_particle_velocity_placeholder[1] = fevect_particle_array[i]->GetComponent(1);
+        fefunct_particle_velocity_placeholder[2] = fevect_particle_array[i]->GetComponent(2);
         aux->SetFEFunctions(fefunct_particle_velocity_placeholder);
 
         // cout << "Aux functions set up " << i << endl;
@@ -804,7 +870,7 @@ int main(int argc, char *argv[])
 
         // Get residual
         double residual = SystemMatrix->GetResidual(sol);
-        cout << "Internal Level: " << i << " Residual: " << residual << endl;
+        cout << "     - Residual: " << residual << endl;
 
         // cout << "Solved System Matrix" << i << endl;
 

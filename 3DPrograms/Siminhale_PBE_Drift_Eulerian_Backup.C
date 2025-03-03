@@ -54,9 +54,7 @@
 #include <iomanip>
 #include <chrono>
 
-#include <omp.h>
-#include <algorithm> 
-#include <numeric>  
+  #include <omp.h>
 
 double bound = 0;
 double timeC = 0;
@@ -150,6 +148,17 @@ void  concentration_params (double *in, double *out)
   out[5] = in[8]; // d(b_z)/dz
 }
 
+// [ b_x, d(b_x)/dx, b_y, d(b_y)/dy, b_z, d(b_z)/dz ]
+void  particle_velocity_params (double *in, double *out)
+{
+  // IN 0,1,2 are the co-ordinates x,y,z
+  out[0] = in[3]; // b_x
+  out[1] = in[4]; // d(b_x)/dx
+  out[2] = in[5]; // b_y
+  out[3] = in[6]; // d(b_y)/dy
+  out[4] = in[7]; // b_z
+  out[5] = in[8]; // d(b_z)/dz
+}
 
 int main(int argc, char *argv[])
 {
@@ -223,9 +232,16 @@ int main(int argc, char *argv[])
   /** set variables' value in TDatabase using argv[1] (*.dat file), and generate the MESH based */
   Domain = new TDomain(argv[1]);
 
-
-  TDatabase::ParamDB->Par_P0 = 0;
-
+#ifdef _SMPI
+  if (rank == 0)
+  {
+    TDatabase::ParamDB->Par_P0 = 1;
+  }
+  else
+  {
+    TDatabase::ParamDB->Par_P0 = 0;
+  }
+#endif
 
   OpenFiles();
   OutFile.setf(std::ios::scientific);
@@ -401,7 +417,6 @@ int main(int argc, char *argv[])
 
   //==========================================================================================================
   // Spatial position at which the internal system is solverd
-  // This is Temporary variables just to obtain the 3D Points in the physical space
   //==========================================================================================================
   double *PosX;
   PosX = new double[3 * N_DOF];
@@ -426,13 +441,16 @@ int main(int argc, char *argv[])
   double StartEnd_intl[2]; // Start and End of the internal co-ordinate
   double **Xpos_internal = new double *[1];
 
-  // Obtains the necessary data from the example file such as the start and end internal co-ordinates
   GetLExampleData(&N_Cells_Intl, StartEnd_intl, BoundConLminLMax, GrowthAndB_Nuc, Xpos_internal);
 
   // Create the internal System object
   TSystemADI1D *Internal_System = new TSystemADI1D(N_Cells_Intl, StartEnd_intl[0], StartEnd_intl[1], BoundConLminLMax[0],
                                                   GrowthAndB_Nuc[0], Xpos_internal[0]);
 
+  // // Stystem setup for Internal Co-ordinates
+  // Internal_System_Space = new TSystemPBE1D(mg_level, Scalar_FeSpaces, Sol_array, Rhs_array,
+  //                               TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE,
+  //                               Scalar_FeFunctions, GetKernel, GetRhs, Domain_Intl);
 
   int *N_Nodal_position_array = new int[1];
   N_Nodal_position_array[0] = Internal_System->GetN_NodalPts();
@@ -463,9 +481,7 @@ int main(int argc, char *argv[])
   // Interpolate the Initial Solution
   Internal_System->Interpolate_With_Coord(N_Coord, solution_all, InitialValue);
 
-  // ==========================================================================================================
-  // -- OUTPUT SETUP FOR VISUALISATION ----
-  // ==========================================================================================================
+  // -- OUTPUT SETUP FOR VISUALISATION ---- //
   // Create an double array to store the solution of the internal system
   double **solution_visualize = new double *[N_InternalPts];
   double **drift_solution_visualize = new double *[N_InternalPts]; // To visualise drift velocity
@@ -474,11 +490,9 @@ int main(int argc, char *argv[])
     solution_visualize[i] = new double[N_PhySpacePts]();
   }
 
-  // ==========================================================================================================
-  // Generate the FE Functions for the internal system
-  // ==========================================================================================================
   // Generate Individual FEFunctions for the internal system
   TFEFunction3D **Scalar_FeFunctions_Intl = new TFEFunction3D *[N_InternalPts];
+  TFEFunction3D **Drift_FeFunctions_Intl = new TFEFunction3D *[N_InternalPts]; // To visualise drift velocity
   for (int i = 0; i < N_InternalPts; i++)
   {
     char name[10];
@@ -507,7 +521,8 @@ int main(int argc, char *argv[])
   }
 
   // Output for Visualization of the codes.
-  VtkBaseName = "Solution_Concentration";
+  VtkBaseName = "Initial_interpolation";
+
   TOutput3D *Output_Intl = new TOutput3D(2, 2, 1, 1, Domain);
 
   // Add all the internal levels for visualisation of Solution
@@ -523,9 +538,6 @@ int main(int argc, char *argv[])
   // setup a fevect function 3d
   // Create a new fespace with order - 2, to store the NSE2D Values, Give boundary condition based on what is used for Fluid simulations
   // Here FE Order 2 is used because, the velocities generally stored as second order solutions
-  // A dummy system matrix is setup to register the second order finite element values within the code. Since the initial scalar problem
-  // is for 1st order only, running the below instructions, will make parmoon to register second order elements, which will be used for interpolation
-  // of the velocity values ( which are stored as second order solutions)
   TFESpace3D *fespace_b = new TFESpace3D(coll, "u_fluid", "u_fluid", BoundCondition_Velocity, 2);
 
   int N_cells = coll->GetN_Cells();
@@ -544,11 +556,9 @@ int main(int argc, char *argv[])
   // create a system matrix and assemble them
   TSystemPBE3D *SystemMatrix_dummy = new TSystemPBE3D(mg_level, fesp_dummy, Sol_array_dummy, Rhs_dummy_array,
                                                       TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
-  // SystemMatrix_dummy->Init(BilinearCoeffs, BoundCondition, BoundValue, NULL);
-  // SystemMatrix_dummy->AssembleARhs();
+  SystemMatrix_dummy->Init(BilinearCoeffs, BoundCondition, BoundValue, NULL);
+  SystemMatrix_dummy->AssembleARhs();
 
-
-  // Read the fluid velocity values into the solution array
   double *u_fluid = new double[3 * n_size_u]();
   // Generate a Fe-Vect function and function
   TFEVectFunct3D *fevect_b = new TFEVectFunct3D(fespace_b, "u_fluid", "u_fluid", u_fluid, n_size_u, 3);
@@ -609,53 +619,63 @@ int main(int argc, char *argv[])
   // This is created with a Boundary condition such that the all alone becomes Dirichlet boundary
   // This Ensures that the wall boundary points are arranged at the end, which enables us to set the drift velocity
   // for the wall points to zero easily
-  TFESpace3D *fespace_particle_velocity = new TFESpace3D(coll, "u_drift", "u_drift", BoundCondition_Particle_Velocity, 2);
+  TFESpace3D *fespace_drift = new TFESpace3D(coll, "u_drift", "u_drift", BoundCondition_DriftVelocity, 2);
 
   // Set up Drift velocity values for each Internal Co-rdinates
+  double **drift_velocity_array = new double *[N_InternalPts]();
   double **particle_velocity_array = new double *[N_InternalPts]();
 
   // Setting FeVect Function for the Drift Velocity for all the internal points
+  TFEVectFunct3D **fevect_drift_array = new TFEVectFunct3D *[N_InternalPts];
   TFEVectFunct3D **fevect_particle_array = new TFEVectFunct3D *[N_InternalPts];
+
+  // Setup Aux Parameters for the Drift Velocity
+  TAuxParam3D **aux_particle_vel_array = new TAuxParam3D *[N_InternalPts];
 
   // generate drift velocity array and fevect function for all the internal points
   for (int i = 0; i < N_InternalPts; i++)
   {
     // Generate the drift velocity array
+    drift_velocity_array[i] = new double[3 * n_size_u]();
     particle_velocity_array[i] = new double[3 * n_size_u]();
 
     // Create a data structure to store the name of the drift velocity with the internal point number
+    char name_drift[10];
+    sprintf(name_drift, "u_drift_L%d_", i);
     char name_particle[10];
     sprintf(name_particle, "u_particle_L%d_", i);
 
     // Generate the FeVect Function for the Drift Velocity
-    fevect_particle_array[i] = new TFEVectFunct3D(fespace_particle_velocity, name_particle, name_particle, particle_velocity_array[i], n_size_u, 3);
+    fevect_drift_array[i] = new TFEVectFunct3D(fespace_drift, name_drift, name_drift, drift_velocity_array[i], n_size_u, 3);
+    fevect_particle_array[i] = new TFEVectFunct3D(fespace_drift, name_particle, name_particle, particle_velocity_array[i], n_size_u, 3);
 
-    // Interpolate the Drift Velocity << For Testing purposes only >>
-    // You need to initialise with initial condition, when there is an values
-    fevect_particle_array[i]->GetComponent(0)->Interpolate(ExactBoundValueParticleVelocity_x);
-    fevect_particle_array[i]->GetComponent(1)->Interpolate(ExactBoundValueParticleVelocity_y);
-    fevect_particle_array[i]->GetComponent(2)->Interpolate(ExactBoundValueParticleVelocity_z);
+    // Interpolate the Drift Velocity
+    fevect_drift_array[i]->GetComponent(0)->Interpolate(Exact_DriftBoundaryValues);
+    fevect_drift_array[i]->GetComponent(1)->Interpolate(Exact_DriftBoundaryValues);
+    fevect_drift_array[i]->GetComponent(2)->Interpolate(Exact_DriftBoundaryValues);
   }
 
   // Create an output object to visualise the drift velocity
-  char *ParticleVeloVTKBaseName = "Particle_Velocity";
-  TOutput3D *Output_ParticleVelocity = new TOutput3D(2, 2, N_InternalPts, 1, Domain);
+  char *DriftVeloVTKBaseName = "Drift_Velocity";
+  TOutput3D *Output_Drift = new TOutput3D(2, 2, N_InternalPts, 1, Domain);
 
   // Add the Drift velocity FeVect Function for each internal level to the output
   for (int i = 0; i < N_InternalPts; i++)
   {
-    Output_ParticleVelocity->AddFEVectFunct(fevect_particle_array[i]);
+    Output_Drift->AddFEVectFunct(fevect_drift_array[i]);
   }
 
   // Write the VTK file for the Drift Velocity
-  writeVtkFile(ParticleVeloVTKBaseName, img, Output_ParticleVelocity);
+  writeVtkFile(DriftVeloVTKBaseName, img, Output_Drift);
+
   // increment the image number
   img++;
 
-  // ==========================================================================================================
-  // Set up the Aux Parameters for the Concentration Equation
-  // Here, the particle velocity (u) is passed as aux param (represented as b)
-  // ==========================================================================================================
+  // ----------------------------------------------------------------------------------------------
+  // ----------------------------------------------------------------------------------------------
+  // Set up the Aux Parameters for the Drift Velocity
+  // ----------------------------------------------------------------------------------------------
+  // ----------------------------------------------------------------------------------------------
   // Set up the aux to pass the velocity field
   TFESpace3D *fesp_aux[1];
   fesp_aux[0] = fespace_b;
@@ -669,7 +689,7 @@ int main(int argc, char *argv[])
   // Is it the actual values, or the derivative in x, y or z
   MultiIndex3D NSFEMultiIndexVelo[6] = {D000, D100, D000, D010, D000, D001};
   // This means, the values will be passed as
-  // [ u_l_x, d(u_l_x)/dx, b_y, d(b_y)/dy, b_z, d(b_z)/dz ]
+  // [ b_x, d(b_x)/dx, b_y, d(b_y)/dy, b_z, d(b_z)/dz ]
   ParamFct *NSFctVelo[1] = {concentration_params};
 
   // This array is the placeholder for the particle velocity function
@@ -680,7 +700,7 @@ int main(int argc, char *argv[])
   fefunct_particle_velocity_placeholder[2] = fevect_particle_array[0]->GetComponent(2);
 
   // setup aux
-  aux = new TAuxParam3D(1, 3, 1, 6, fesp_aux, fefunct_particle_velocity_placeholder, NSFctVelo, NSFEFctIndexVelo, NSFEMultiIndexVelo, 6, NSBeginParamVelo);
+  aux = new TAuxParam3D(1, 3, 1, 3, fesp_aux, fefunct_particle_velocity_placeholder, NSFctVelo, NSFEFctIndexVelo, NSFEMultiIndexVelo, 3, NSBeginParamVelo);
 
   // Set the FEFunction as 1st internal point to the placeholder
   aux->SetFEFunctions(fefunct_particle_velocity_placeholder);
@@ -696,10 +716,9 @@ int main(int argc, char *argv[])
   // Perform init for the system matrix
   SystemMatrix->Init_with_NSEValues(BilinearCoeffs, BoundCondition, BoundValue, aux);
   SystemMatrix->AssembleMRhs();
-  cout << "[INFO] : System Matrix Assembled for Concentration Equation" << endl;
 
   // ==========================================================================================================
-  //  Set up the particle paramters in the internal system
+  // Set up the particle paramters in the internal system
   // ===========================================================================================================
   // particle gravity
   double g[3] = {0, 0, 0};
@@ -718,32 +737,26 @@ int main(int argc, char *argv[])
   TFEFunction1D *fefunction_internal = new TFEFunction1D(fespace_internal, "Internal", "Internal", internal_values, N_InternalPts);
   fefunction_internal->GridToData(); // Populates the internal values with the values from the grid (l1, l2, l3, ...)
 
-  cout << "[INFO] : FEFunction for Internal Co-ordinates in 1D is created" << endl;
-
   // loop over all internal points and print the values
   for (int i = 0; i < N_InternalPts; i++)
   {
     diameter_values[i] = internal_values[i];
     particle_rho_values[i] = 1000;
   }
-  
-  // Used for Implicit Schemes  Archived Function, not used 
-  SystemMatrix->Init_for_drift_velocity(fevect_particle_array, g, fluid_rho, particle_rho_values, fluid_viscosity,
+
+  SystemMatrix->Init_for_drift_velocity(fevect_drift_array, g, fluid_rho, particle_rho_values, fluid_viscosity,
                                         N_InternalPts, diameter_values, fevect_b, n_size_u);
-  cout << "[INFO] : Initialised the Parameters for the Drift Velocity Solver" << endl;
+
   //=======================================================================================================================
   // SETTING UP THE EULERIAN PARTICLE VELOCITY SOLVER
   //=======================================================================================================================
   // We need:
   // - Base flow velocities (u1,u2,u3) for advection terms
   // - Gradients of u_l (du1/dx, du2/dy, du3/dz) 
+  
   TFESpace3D *fesp_EP[1];
-  fesp_EP[0] = fespace_particle_velocity;  // external fluid velocity ( read from file )
+  fesp_EP[0] = fespace_drift;  // external fluid velocity ( read from file )
   int BeginParamVelo_EP[1] = {0};
-
-  // int number of FeFunction values needed
-  int n_fevalues = 9;
-  int n_fefunction = 6;
 
   int FEFctIndexVelo_EP[9] = {
       0, 1, 2,      // u1, u2, u3
@@ -757,11 +770,24 @@ int main(int argc, char *argv[])
       D000, D000, D000   // particle velocity values
   };
 
-  // The Aux Parameter for each of the component is different, So we will create new aux parameter for each component
-  TAuxParam3D **aux_ep = new TAuxParam3D *[N_InternalPts];
+
+
+  // Function arrays for velocities - shared across all components
+  TFEFunction3D *fefunct_velocity_components[6];
+  fefunct_velocity_components[0] = fevect_b->GetComponent(0);  // u1
+  fefunct_velocity_components[1] = fevect_b->GetComponent(1);  // u2
+  fefunct_velocity_components[2] = fevect_b->GetComponent(2);  // u3
+  fefunct_velocity_components[3] = fevect_particle_array[0]->GetComponent(0);  // particle vel x
+  fefunct_velocity_components[4] = fevect_particle_array[0]->GetComponent(1);  // particle vel y
+  fefunct_velocity_components[5] = fevect_particle_array[0]->GetComponent(2);  // particle vel z
 
   // Parameter functions - potentially different for each component
   ParamFct *Particle_Param[1] = {particle_velocity_params};
+
+  // Create aux parameter objects for each component
+  TAuxParam3D *aux_ep = new TAuxParam3D(1, 6, 1, 9, 
+      fesp_EP, fefunct_velocity_components, Particle_Param,
+      FEFctIndexVelo_EP, FEMultiIndexVelo_EP, 3, BeginParamVelo_EP); 
 
   // Create System Matrix for Each internal level for each co-ordinate dimension
   TSystemDriftVelocity3D **SystemMatrix_EP_x = new TSystemDriftVelocity3D *[N_InternalPts];
@@ -782,43 +808,12 @@ int main(int argc, char *argv[])
   double **OldSol_array_EP_y = new double *[N_InternalPts];
   double **OldSol_array_EP_z = new double *[N_InternalPts];
 
-    // generate temporary double pointers to store the solution and rhs
-    // Need it in this format to pass them to SystemMatrix Constructor
-    double*** rhs_array_x = new double**[N_InternalPts];
-    double*** rhs_array_y = new double**[N_InternalPts];
-    double*** rhs_array_z = new double**[N_InternalPts];
-
-    double*** Sol_array_EP_x = new double**[N_InternalPts];
-    double*** Sol_array_EP_y = new double**[N_InternalPts];
-    double*** Sol_array_EP_z = new double**[N_InternalPts];
-
   // Get number of DOF of Particle Eulerian .. Fespace drift and fespace particle velocity are same
-  int n_size_u_EP = fespace_particle_velocity->GetN_DegreesOfFreedom();
+  int n_size_u_EP = fespace_drift->GetN_DegreesOfFreedom();
 
-  // Create new double pointer fefunction array for each internal level
-  TFEFunction3D*** fefunct_velocity_components_internal = new TFEFunction3D**[N_InternalPts];
-
-  // Loop over internal levels and create aux parameters for each component
+  // Create the System Matrix for each internal level
   for (int internal_level = 0; internal_level < N_InternalPts; internal_level++)
   {
-    // for each internal point, create a new fefunct_velocity_components_internal with 6 components
-    fefunct_velocity_components_internal[internal_level] = new TFEFunction3D*[6];
-
-    // fill the fefunction values
-    fefunct_velocity_components_internal[internal_level][0] = fefunct_b_array[0];
-    fefunct_velocity_components_internal[internal_level][1] = fefunct_b_array[1];
-    fefunct_velocity_components_internal[internal_level][2] = fefunct_b_array[2];
-    // fill the derivatives of u_l for the corresponding internal level
-    fefunct_velocity_components_internal[internal_level][3] = fevect_particle_array[internal_level]->GetComponent(0);
-    fefunct_velocity_components_internal[internal_level][4] = fevect_particle_array[internal_level]->GetComponent(1);
-    fefunct_velocity_components_internal[internal_level][5] = fevect_particle_array[internal_level]->GetComponent(2);
-
-    // Create aux parameter objects for each component
-    aux_ep[internal_level] = new TAuxParam3D(1, n_fefunction, 1, n_fevalues, fesp_EP, fefunct_velocity_components_internal[internal_level], Particle_Param,
-                                FEFctIndexVelo_EP, FEMultiIndexVelo_EP, 3, BeginParamVelo_EP);
-    cout << "[INFO] : Aux Parameters for Particle Velocity Solver Created for Internal Level : " << internal_level << endl;
-
-
     // Create the RHS Array
     Rhs_array_EP_x[internal_level] = new double[n_size_u_EP]();
     Rhs_array_EP_y[internal_level] = new double[n_size_u_EP]();
@@ -834,44 +829,42 @@ int main(int argc, char *argv[])
     OldSol_array_EP_y[internal_level] = new double[n_size_u_EP]();
     OldSol_array_EP_z[internal_level] = new double[n_size_u_EP]();
 
-    // create a double pointer to store the rhs arrays to be sent to assembly
-    rhs_array_x[internal_level] = new double*[1];
-    rhs_array_y[internal_level] = new double*[1];
-    rhs_array_z[internal_level] = new double*[1];
 
-    // create a double pointer to store the temp solution arrays to be sent to assembly
-    Sol_array_EP_x[internal_level] = new double*[1];
-    Sol_array_EP_y[internal_level] = new double*[1];
-    Sol_array_EP_z[internal_level] = new double*[1];
+    double** rhs_array_x = new double*[1];
+    double** rhs_array_y = new double*[1];
+    double** rhs_array_z = new double*[1];
 
+    double** Sol_array_EP_x = new double*[1];
+    double** Sol_array_EP_y = new double*[1];
+    double** Sol_array_EP_z = new double*[1];
 
+    rhs_array_x[0] = Rhs_array_EP_x[internal_level];
+    rhs_array_y[0] = Rhs_array_EP_y[internal_level];
+    rhs_array_z[0] = Rhs_array_EP_z[internal_level];
 
-    rhs_array_x[internal_level][0] = Rhs_array_EP_x[internal_level];
-    rhs_array_y[internal_level][0] = Rhs_array_EP_y[internal_level];
-    rhs_array_z[internal_level][0] = Rhs_array_EP_z[internal_level];
-
-    Sol_array_EP_x[internal_level][0] = fevect_particle_array[internal_level]->GetComponent(0)->GetValues();
-    Sol_array_EP_y[internal_level][0] = fevect_particle_array[internal_level]->GetComponent(1)->GetValues();
-    Sol_array_EP_z[internal_level][0] = fevect_particle_array[internal_level]->GetComponent(2)->GetValues();
+    Sol_array_EP_x[0] = fevect_particle_array[internal_level]->GetComponent(0)->GetValues();
+    Sol_array_EP_y[0] = fevect_particle_array[internal_level]->GetComponent(1)->GetValues();
+    Sol_array_EP_z[0] = fevect_particle_array[internal_level]->GetComponent(2)->GetValues();
 
 
-    SystemMatrix_EP_x[internal_level] = new TSystemDriftVelocity3D(mg_level, fesp_EP, Sol_array_EP_x[internal_level], rhs_array_x[internal_level],
-                                                        TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
-    SystemMatrix_EP_y[internal_level] = new TSystemDriftVelocity3D(mg_level, fesp_EP, Sol_array_EP_y[internal_level], rhs_array_y[internal_level],
-                                                        TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
-    SystemMatrix_EP_z[internal_level] = new TSystemDriftVelocity3D(mg_level, fesp_EP, Sol_array_EP_z[internal_level], rhs_array_z[internal_level],
-                                                        TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
+    SystemMatrix_EP_x[internal_level] = new TSystemDriftVelocity3D(mg_level, fesp_EP, Sol_array_EP_x, rhs_array_x,
+                                                         TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
+    SystemMatrix_EP_y[internal_level] = new TSystemDriftVelocity3D(mg_level, fesp_EP, Sol_array_EP_y, rhs_array_y,
+                                                         TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
+    SystemMatrix_EP_z[internal_level] = new TSystemDriftVelocity3D(mg_level, fesp_EP, Sol_array_EP_z, rhs_array_z,
+                                                         TDatabase::ParamDB->DISCTYPE, TDatabase::ParamDB->SOLVER_TYPE);
 
     // Initialize the system matrix
-    SystemMatrix_EP_x[internal_level]->Init(BilinearCoeffs_ParticleVelocity, BoundCondition_Particle_Velocity, BoundValue_Particle_Velocity, aux_ep[internal_level], 0, 0);
-    SystemMatrix_EP_y[internal_level]->Init(BilinearCoeffs_ParticleVelocity, BoundCondition_Particle_Velocity, BoundValue_Particle_Velocity, aux_ep[internal_level], 1, 0);
-    SystemMatrix_EP_z[internal_level]->Init(BilinearCoeffs_ParticleVelocity, BoundCondition_Particle_Velocity, BoundValue_Particle_Velocity, aux_ep[internal_level], 2, 0);
+    SystemMatrix_EP_x[internal_level]->Init(BilinearCoeffs_ParticleVelocity, BoundCondition_Particle_Velocity, BoundValue_Particle_Velocity, aux_ep, 0, 0);
+    SystemMatrix_EP_y[internal_level]->Init(BilinearCoeffs_ParticleVelocity, BoundCondition_Particle_Velocity, BoundValue_Particle_Velocity, aux_ep, 1, 0);
+    SystemMatrix_EP_z[internal_level]->Init(BilinearCoeffs_ParticleVelocity, BoundCondition_Particle_Velocity, BoundValue_Particle_Velocity, aux_ep, 2, 0);
 
     // Assemble the right hand side
     SystemMatrix_EP_x[internal_level]->AssembleMRhs();
     SystemMatrix_EP_y[internal_level]->AssembleMRhs();
     SystemMatrix_EP_z[internal_level]->AssembleMRhs();
   }
+  exit(0);
 
   //======================================================================
   // parameters for time stepping scheme
@@ -886,8 +879,8 @@ int main(int argc, char *argv[])
   // assemble the internal system matrix
   // timestep is neede to assemble, so set time parameters
   SetTimeDiscParameters(1);
-
-  UpdateStiffnessMat = TRUE; // check BilinearCoeffs in example file
+  // System_Space->AssembleIntlMat();
+  UpdateStiffnessMat = FALSE; // check BilinearCoeffs in example file
   bool UpdateRhs = TRUE;      // check BilinearCoeffs in example file
   ConvectionFirstTime = TRUE;
 
@@ -944,6 +937,7 @@ int main(int argc, char *argv[])
         double* sol_particle_velocity_x = particle_velocity_array[i];
         double* sol_particle_velocity_y = particle_velocity_array[i] + n_size_u_EP;
         double* sol_particle_velocity_z = particle_velocity_array[i] + 2 * n_size_u_EP;
+
         // Assemble System matrices for each component
         SystemMatrix_EP_x[i]->AssembleARhs();
         SystemMatrix_EP_y[i]->AssembleARhs();
@@ -961,23 +955,6 @@ int main(int argc, char *argv[])
         memcpy(OldRhs_array_EP_y[i], Rhs_array_EP_y[i], n_size_u_EP * SizeOfDouble);
         memcpy(OldRhs_array_EP_z[i], Rhs_array_EP_z[i], n_size_u_EP * SizeOfDouble);
 
-        // Compute the Min, max and Average value of Solutions
-        double min_x = *std::min_element(sol_particle_velocity_x, sol_particle_velocity_x + n_size_u_EP);
-        double max_x = *std::max_element(sol_particle_velocity_x, sol_particle_velocity_x + n_size_u_EP);
-        double min_y = *std::min_element(sol_particle_velocity_y, sol_particle_velocity_y + n_size_u_EP);
-        double max_y = *std::max_element(sol_particle_velocity_y, sol_particle_velocity_y + n_size_u_EP);
-        double min_z = *std::min_element(sol_particle_velocity_z, sol_particle_velocity_z + n_size_u_EP);
-        double max_z = *std::max_element(sol_particle_velocity_z, sol_particle_velocity_z + n_size_u_EP);
-
-        //compute the average value
-        double sum_x = std::accumulate(sol_particle_velocity_x, sol_particle_velocity_x + n_size_u_EP, 0.0);
-        double sum_y = std::accumulate(sol_particle_velocity_y, sol_particle_velocity_y + n_size_u_EP, 0.0);
-        double sum_z = std::accumulate(sol_particle_velocity_z, sol_particle_velocity_z + n_size_u_EP, 0.0);
-
-        cout << "OLD Min x: " << min_x << " Max x: " << max_x << " Average x: " << sum_x / n_size_u_EP << endl;
-        cout << "OLD Min y: " << min_y << " Max y: " << max_y << " Average y: " << sum_y / n_size_u_EP << endl;
-        cout << "OLD Min z: " << min_z << " Max z: " << max_z << " Average z: " << sum_z / n_size_u_EP << endl;
-
         // Solve the system matrix
         SystemMatrix_EP_x[i]->Solve_Pardiso(sol_particle_velocity_x, m - 1);
         SystemMatrix_EP_y[i]->Solve_Pardiso(sol_particle_velocity_y, m - 1);
@@ -987,25 +964,6 @@ int main(int argc, char *argv[])
         SystemMatrix_EP_x[i]->RestoreMassMat();
         SystemMatrix_EP_y[i]->RestoreMassMat();
         SystemMatrix_EP_z[i]->RestoreMassMat();
-
-        // Compute the Min, max and Average value of Solutions
-        min_x = *std::min_element(sol_particle_velocity_x, sol_particle_velocity_x + n_size_u_EP);
-        max_x = *std::max_element(sol_particle_velocity_x, sol_particle_velocity_x + n_size_u_EP);
-        min_y = *std::min_element(sol_particle_velocity_y, sol_particle_velocity_y + n_size_u_EP);
-        max_y = *std::max_element(sol_particle_velocity_y, sol_particle_velocity_y + n_size_u_EP);
-        min_z = *std::min_element(sol_particle_velocity_z, sol_particle_velocity_z + n_size_u_EP);
-        max_z = *std::max_element(sol_particle_velocity_z, sol_particle_velocity_z + n_size_u_EP);
-
-        //compute the average value
-        sum_x = std::accumulate(sol_particle_velocity_x, sol_particle_velocity_x + n_size_u_EP, 0.0);
-        sum_y = std::accumulate(sol_particle_velocity_y, sol_particle_velocity_y + n_size_u_EP, 0.0);
-        sum_z = std::accumulate(sol_particle_velocity_z, sol_particle_velocity_z + n_size_u_EP, 0.0);
-
-        cout << "Min x: " << min_x << " Max x: " << max_x << " Average x: " << sum_x / n_size_u_EP << endl;
-        cout << "Min y: " << min_y << " Max y: " << max_y << " Average y: " << sum_y / n_size_u_EP << endl;
-        cout << "Min z: " << min_z << " Max z: " << max_z << " Average z: " << sum_z / n_size_u_EP << endl;
-
-
 
         //--------------------------------------------------------------------------------------------------//
         // -- Solve for internal velocity levels -- //
@@ -1037,6 +995,8 @@ int main(int argc, char *argv[])
         double residual = SystemMatrix->GetResidual(sol);
         cout << "Internal Level: " << i << " Residual: " << residual << endl;
 
+        // cout << "Solved System Matrix" << i << endl;
+        exit(0);
         // restore the mass matrix for the next time step
         // unless the stiffness matrix or rhs change in time, it is not necessary to assemble the system matrix in every time step
         if (UpdateStiffnessMat || UpdateRhs)
@@ -1063,7 +1023,7 @@ int main(int argc, char *argv[])
 
     // Output the solution for all internal layers
     writeVtkFile(VtkBaseName, img, Output_Intl);
-    writeVtkFile(ParticleVeloVTKBaseName, img, Output_ParticleVelocity);
+    writeVtkFile(DriftVeloVTKBaseName, img, Output_Drift);
     img++;
     // if(m % TDatabase::TimeDB->STEPS_PER_IMAGE == 0)
   } // while(TDatabase::TimeDB->CURRENTTIME< end_time)
